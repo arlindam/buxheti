@@ -221,6 +221,12 @@ form{display:grid;gap:14px}
 .cur-pick select{appearance:none;-webkit-appearance:none;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 28px 7px 12px;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--ink)}
 .cur-pick::after{content:"";position:absolute;right:12px;top:50%;width:6px;height:6px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-70%) rotate(45deg);pointer-events:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.ctots{display:grid;gap:14px;margin-top:4px}
+.ctot .big{margin:2px 0 0}
+.ctot.minor .big{font-size:clamp(1.6rem,5vw,2.3rem)}
+.ctot .legend{margin-top:4px}
+.sel{appearance:none;-webkit-appearance:none;background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23646b82' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid transparent;border-radius:10px;padding:10px 30px 10px 12px;width:100%;font-weight:600}
+.sel:focus{border-color:var(--accent);outline:none}
 .lock-note{margin:0;font-size:.8rem;color:var(--muted);line-height:1.45;background:var(--surface-2);border-radius:12px;padding:10px 12px}
 </style>
 </head>
@@ -345,10 +351,8 @@ form{display:grid;gap:14px}
     <section class="hero bal-hero" aria-label="Balanca momentale">
       <div>
         <div class="eyebrow">Balanca momentale</div>
-        <div class="big" id="balTotal">0,00 €</div>
+        <div id="balTotals" class="ctots"><div class="big">0,00 €</div></div>
         <p class="verdict" id="balNote">&nbsp;</p>
-        <div class="stack" id="balStack" aria-hidden="true"></div>
-        <div class="legend" id="balLegend"></div>
       </div>
     </section>
     <div class="cols">
@@ -360,8 +364,11 @@ form{display:grid;gap:14px}
         <div class="card-head"><h2>Shto llogari</h2></div>
         <form id="accForm" novalidate>
           <div><div class="lbl" id="accTypeLbl">Lloji</div><div class="chips" id="accTypes" role="radiogroup" aria-labelledby="accTypeLbl"></div></div>
-          <label class="field"><span class="lbl">Emri</span><input id="accName" type="text" maxlength="40" placeholder="p.sh. ProCredit, Kuleta"></label>
-          <label class="amount" for="accBal"><span class="cur-sym">€</span><input id="accBal" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="Balanca"></label>
+          <div class="row2">
+            <label class="field"><span class="lbl">Emri</span><input id="accName" type="text" maxlength="40" placeholder="p.sh. ProCredit"></label>
+            <label class="field"><span class="lbl">Monedha</span><select id="accCur" class="sel"></select></label>
+          </div>
+          <label class="amount" for="accBal"><span id="accSym">€</span><input id="accBal" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="Balanca"></label>
           <p class="hint" id="accHint"></p>
           <button class="btn" type="submit">Shto llogarinë</button>
           <div class="status" id="accStatus" aria-live="polite"></div>
@@ -467,6 +474,7 @@ let CUR=(()=>{try{return localStorage.getItem("buxheti-cur")||"EUR"}catch(_){ret
 const curInfo=()=>CURRENCIES.find(c=>c.code===CUR)||CURRENCIES[0];
 const money=n=>{const c=curInfo();const num=Math.abs(n).toLocaleString(c.loc,{minimumFractionDigits:2,maximumFractionDigits:2});
   return (n<0?"−":"")+(c.after?num+" "+c.sym:c.sym+(c.space?" ":"")+num)};
+const moneyIn=(n,code)=>{const keep=CUR;CUR=code||keep;const out=money(n);CUR=keep;return out};
 const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const valid=e=>e&&typeof e.id==="string"&&(e.kind==="in"||e.kind==="out")&&typeof e.amount==="number"&&e.amount>0&&/^\d{4}-\d{2}-\d{2}$/.test(e.date);
 
@@ -525,9 +533,9 @@ function parseAmount(v){
   const n=Number(s); return isFinite(n)?Math.round((neg?-n:n)*100)/100:NaN;
 }
 const toInput=n=>(Math.round(n*100)/100).toFixed(2).replace(".",",");
-function hintFor(inputId,hintId){
+function hintFor(inputId,hintId,curFn){
   const i=$(inputId),h=$(hintId); if(!i||!h)return;
-  i.addEventListener("input",()=>{const v=parseAmount(i.value); h.textContent=!i.value.trim()?"":isNaN(v)?"Shkruaj vetëm numra, p.sh. 12,50":"= "+money(v)});
+  i.addEventListener("input",()=>{const v=parseAmount(i.value); h.textContent=!i.value.trim()?"":isNaN(v)?"Shkruaj vetëm numra, p.sh. 12,50":"= "+(curFn?moneyIn(v,curFn()):money(v))});
 }
 
 /* ====== FACE ID (WebAuthn) ======
@@ -980,7 +988,7 @@ function applyCur(code,save){
   if(save&&user&&KEY) seal({cur:code}).then(x=>setDoc(userRef(),{prefs:x},{merge:true})).then(()=>say("Monedha: "+curInfo().name+". Shumat s'konvertohen, ndryshon vetëm shenja.")).catch(()=>{});
 }
 $("curSel").onchange=()=>applyCur($("curSel").value,true);
-function setPh(){const z=(0).toLocaleString(curInfo().loc,{minimumFractionDigits:2});$("amount").placeholder=z;$("accBal").placeholder=z}
+function setPh(){const z=(0).toLocaleString(curInfo().loc,{minimumFractionDigits:2});$("amount").placeholder=z;$("accBal").placeholder="0,00"}
 document.querySelectorAll(".cur-sym").forEach(e=>e.textContent=curInfo().sym); setPh();
 
 /* ---------- tabs ---------- */
@@ -998,12 +1006,12 @@ try{ if(localStorage.getItem("buxheti-tab")==="balance") setTab("balance") }catc
 /* ---------- balanca ---------- */
 const ACC_TYPES=[
   {id:"bank",name:"Bankë",color:"--c-bills"},
-  {id:"card",name:"Kartelë",color:"--c-rent"},
-  {id:"cash",name:"Cash",color:"--c-groceries"},
-  {id:"savings",name:"Kursime",color:"--c-transport"},
-  {id:"other",name:"Tjetër",color:"--c-other"}
+  {id:"cash",name:"Cash",color:"--c-groceries"}
 ];
-const accType=id=>ACC_TYPES.find(t=>t.id===id)||ACC_TYPES[4];
+const accType=id=>id==="cash"?ACC_TYPES[1]:ACC_TYPES[0];   // llojet e vjetra (kartelë, kursime) shfaqen si Bankë
+const accCur=a=>a.cur||CUR;
+(function(){const sel=$("accCur");CURRENCIES.forEach(c=>{const o=document.createElement("option");o.value=c.code;o.textContent=c.sym+" "+c.code+" · "+c.name;sel.append(o)});sel.value=CUR;
+  sel.onchange=()=>{$("accSym").textContent=(CURRENCIES.find(c=>c.code===sel.value)||CURRENCIES[0]).sym;$("accBal").dispatchEvent(new Event("input"))};$("accSym").textContent=curInfo().sym})();
 const shortDate=ts=>{const d=new Date(ts);return d.getDate()+" "+MONTHS[d.getMonth()].slice(0,3)};
 let editingAcc=null;
 (function(){const box=$("accTypes");ACC_TYPES.forEach((t,i)=>{const l=document.createElement("label");l.className="chip";
@@ -1011,14 +1019,22 @@ let editingAcc=null;
 
 function renderBalance(){
   if(!user||!KEY)return;
-  const total=accounts.reduce((a,x)=>a+x.balance,0);
-  $("balTotal").textContent=money(total); $("balTotal").classList.toggle("neg",total<0);
+  // totali veç për secilën monedhë (pa konvertim)
+  const curs=[...new Set(accounts.map(accCur))].sort((a,b)=>(a===CUR?-1:b===CUR?1:0)||a.localeCompare(b));
+  if(!curs.length) curs.push(CUR);
+  const box=$("balTotals"); box.innerHTML="";
+  curs.forEach((code,i)=>{
+    const inCur=accounts.filter(a=>accCur(a)===code), tot=inCur.reduce((s,a)=>s+a.balance,0);
+    const d=document.createElement("div"); d.className="ctot"+(i?" minor":"");
+    const big=document.createElement("div"); big.className="big"+(tot<0?" neg":""); big.textContent=moneyIn(tot,code); d.append(big);
+    const lg=document.createElement("div"); lg.className="legend";
+    ACC_TYPES.forEach(t=>{const v=inCur.filter(a=>accType(a.type).id===t.id).reduce((s,a)=>s+a.balance,0); if(!inCur.some(a=>accType(a.type).id===t.id))return;
+      const sp=document.createElement("span"); sp.innerHTML=`<span class="sw" style="background:var(${t.color})"></span>`; sp.append(t.name+" "); const b=document.createElement("b"); b.textContent=moneyIn(v,code); sp.append(b); lg.append(sp)});
+    if(lg.childNodes.length) d.append(lg);
+    box.append(d);
+  });
   const last=accounts.reduce((m,x)=>Math.max(m,x.updated||0),0);
-  $("balNote").textContent=accounts.length?("Në "+accounts.length+(accounts.length===1?" llogari":" llogari")+" · përditësuar "+shortDate(last)):"Shto llogarinë e parë: kartelën, cash-in ose bankën.";
-  const pos=accounts.filter(a=>a.balance>0), posSum=pos.reduce((a,x)=>a+x.balance,0);
-  const byType=ACC_TYPES.map(t=>({t,v:accounts.filter(a=>a.type===t.id).reduce((s,a)=>s+a.balance,0)})).filter(x=>x.v!==0);
-  $("balStack").innerHTML=posSum>0?ACC_TYPES.map(t=>{const v=pos.filter(a=>a.type===t.id).reduce((s,a)=>s+a.balance,0);return v>0?`<i style="width:${(v/posSum*100).toFixed(2)}%;background:var(${t.color})"></i>`:""}).join(""):"";
-  $("balLegend").innerHTML=""; byType.forEach(({t,v})=>{const s=document.createElement("span");s.innerHTML=`<span class="sw" style="background:var(${t.color})"></span>`;s.append(t.name+" ");const b=document.createElement("b");b.textContent=money(v);s.append(b);$("balLegend").append(s)});
+  $("balNote").textContent=accounts.length?("Në "+accounts.length+" llogari"+(curs.length>1?" · "+curs.length+" monedha":"")+" · përditësuar "+shortDate(last)):"Shto llogarinë e parë: sa ke në bankë dhe sa cash.";
 
   const list=$("accList"); list.innerHTML="";
   if(!accounts.length){list.innerHTML=`<p class="empty">Ende asnjë llogari. Shtoje të parën me formularin.</p>`;return}
@@ -1028,22 +1044,22 @@ function renderBalance(){
     r.innerHTML=`<div class="ico" style="background:var(${t.color})"></div><div class="t"><b></b><small></small></div><div class="a${a.balance<0?" neg":""}"></div><div class="acc-act"></div>`;
     r.querySelector(".ico").textContent=a.name.charAt(0).toUpperCase();
     r.querySelector("b").textContent=a.name;
-    r.querySelector("small").textContent=t.name+(a.updated?" · "+shortDate(a.updated):"");
+    r.querySelector("small").textContent=t.name+" · "+accCur(a)+(a.updated?" · "+shortDate(a.updated):"");
     const act=r.querySelector(".acc-act");
     if(editingAcc===a.id){
       const f=document.createElement("form"); f.className="acc-edit";
-      const inp=document.createElement("input"); inp.type="text"; inp.inputMode="decimal"; inp.autocomplete="off"; inp.id="accEdit-"+a.id; inp.value=toInput(a.balance); inp.setAttribute("aria-label","Balanca e re për "+a.name);
+      const inp=document.createElement("input"); inp.type="text"; inp.inputMode="decimal"; inp.autocomplete="off"; inp.id="accEdit-"+a.id; inp.value=toInput(a.balance); inp.setAttribute("aria-label","Balanca e re për "+a.name+" në "+accCur(a));
       const ok=document.createElement("button"); ok.className="mini go"; ok.type="submit"; ok.textContent="Ruaj";
       const no=document.createElement("button"); no.className="mini"; no.type="button"; no.textContent="Anulo"; no.onclick=()=>{editingAcc=null;renderBalance()};
       f.append(inp,ok,no);
       f.onsubmit=async ev=>{ev.preventDefault(); const v=parseAmount(inp.value);
         if(isNaN(v)){$("accStatus").textContent="Shuma s'është e qartë. Shkruaj p.sh. 1.250,40";inp.focus();return}
         editingAcc=null; const {id,...body}=a;
-        try{await setDoc(accRef(id),await seal({...body,balance:v,updated:Date.now()}));$("accStatus").textContent=a.name+": "+money(v)}catch(_){$("accStatus").textContent="S'u ruajt. Provo përsëri."}};
+        try{await setDoc(accRef(id),await seal({...body,balance:v,updated:Date.now()}));$("accStatus").textContent=a.name+": "+moneyIn(v,accCur(a))}catch(_){$("accStatus").textContent="S'u ruajt. Provo përsëri."}};
       r.querySelector(".a").replaceWith(f); act.remove();
       list.append(r); setTimeout(()=>{inp.focus();inp.select()},0); return;
     }
-    r.querySelector(".a").textContent=money(a.balance);
+    r.querySelector(".a").textContent=moneyIn(a.balance,accCur(a));
     const ed=document.createElement("button"); ed.className="mini"; ed.type="button"; ed.textContent="Ndrysho"; ed.setAttribute("aria-label","Ndrysho balancën e "+a.name);
     ed.onclick=()=>{editingAcc=a.id;renderBalance()};
     const del=document.createElement("button"); del.className="del"; del.type="button"; del.textContent="×"; del.setAttribute("aria-label","Fshi "+a.name);
@@ -1057,12 +1073,13 @@ $("accForm").addEventListener("submit",async ev=>{
   const name=$("accName").value.trim(), bal=parseAmount($("accBal").value), type=document.querySelector('input[name=accType]:checked').value;
   if(!name){$("accStatus").textContent="Shkruaj emrin e llogarisë.";$("accName").focus();return}
   if(isNaN(bal)){$("accStatus").textContent="Shkruaj balancën, p.sh. 1.250,40";$("accBal").focus();return}
+  const cur=$("accCur").value;
   const ref=doc(collection(db,"users",user.uid,"accounts"));
   $("accName").value=""; $("accBal").value=""; $("accHint").textContent="";
-  try{await setDoc(ref,await seal({name,type,balance:bal,updated:Date.now()}));$("accStatus").textContent="U shtua: "+name+", "+money(bal)}
+  try{await setDoc(ref,await seal({name,type,cur,balance:bal,updated:Date.now()}));$("accStatus").textContent="U shtua: "+name+", "+moneyIn(bal,cur)}
   catch(_){$("accStatus").textContent="S'u ruajt. Kontrollo internetin dhe provo përsëri."}
 });
-hintFor("amount","amtHint"); hintFor("accBal","accHint");
+hintFor("amount","amtHint"); hintFor("accBal","accHint",()=>$("accCur").value);
 
 $("date").value=iso(now);
 fillChips(); syncMode();
