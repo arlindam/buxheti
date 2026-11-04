@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="sq">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#151b34">
+<title>Buxheti Im</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%23ff6a3d' stroke-width='6' stroke-dasharray='48 100' transform='rotate(-90 16 16)'/%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='%2314a37a' stroke-width='6' stroke-dasharray='0 48 28 100' transform='rotate(-90 16 16)'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: navy hero with the month's balance + spending ring, then form and category limits side by side, then the day-by-day ledger, then backup tools */
+:root{
+  --bg:#eceff5; --surface:#ffffff; --surface-2:#f4f5f9; --ink:#121628; --muted:#646b82; --line:#dde1ea;
+  --hero:#151b34; --hero-ink:#f3f4fb; --hero-muted:#9aa2c4; --hero-line:#2a3256; --hero-neg:#ff8a8d;
+  --accent:#ff6a3d; --accent-ink:#ffffff; --income:#0f9a72; --expense:#e5484d;
+  --c-rent:#8b5cf6; --c-bills:#3d74ff; --c-groceries:#12a47b; --c-transport:#f2a516;
+  --c-dining:#ff6a3d; --c-health:#e2468c; --c-shopping:#13a8c2; --c-other:#868ca6;
+  --display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --body:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0b0e1a; --surface:#141829; --surface-2:#1b2035; --ink:#eceef8; --muted:#979db8; --line:#272d45;
+  --hero:#1d2548; --hero-ink:#f3f4fb; --hero-muted:#a3abd0; --hero-line:#323b66; --hero-neg:#ff9a9c;
+  --accent:#ff7a50; --accent-ink:#1a0d07; --income:#3fd3a0; --expense:#ff6b6f;
+  --c-rent:#a78bfa; --c-bills:#6b95ff; --c-groceries:#3fd3a0; --c-transport:#ffc043;
+  --c-dining:#ff8a63; --c-health:#f472b6; --c-shopping:#38c9e0; --c-other:#9ea4bd;
+  color-scheme:dark}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.wrap{max-width:1040px;margin:0 auto;padding-top:max(20px,env(safe-area-inset-top));padding-bottom:max(48px,env(safe-area-inset-bottom));padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));display:grid;gap:18px}
+
+/* top bar */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--display);font-weight:800;font-size:1.25rem;letter-spacing:-.01em}
+.brand svg{width:30px;height:30px}
+.month{display:flex;align-items:center;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px}
+.month button{border:0;background:transparent;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:1.15rem;line-height:1}
+.month button:hover{background:var(--surface-2)}
+.month span{font-weight:700;min-width:120px;text-align:center}
+.month .today{font-size:.75rem;font-weight:700;width:auto;padding:0 12px;border-radius:999px;color:var(--muted)}
+
+/* hero */
+.hero{position:relative;overflow:hidden;background:var(--hero);color:var(--hero-ink);border-radius:22px;padding:26px 28px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center}
+.hero::before{content:"";position:absolute;inset:0;background-image:radial-gradient(var(--hero-line) 1px,transparent 1.2px);background-size:18px 18px;opacity:.55;pointer-events:none;mask-image:linear-gradient(110deg,transparent 35%,#000 100%);-webkit-mask-image:linear-gradient(110deg,transparent 35%,#000 100%)}
+.hero>*{position:relative;min-width:0}
+.eyebrow{font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--hero-muted)}
+.big{font-family:var(--display);font-weight:800;font-size:clamp(2.3rem,7vw,3.6rem);line-height:1.05;letter-spacing:-.03em;margin:6px 0 4px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.big.neg{color:var(--hero-neg)}
+.verdict{color:var(--hero-muted);font-size:.95rem;margin:0}
+.pair{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.pill{background:rgba(255,255,255,.06);border:1px solid var(--hero-line);border-radius:14px;padding:10px 14px;min-width:150px}
+.pill .k{font-size:.75rem;color:var(--hero-muted);font-weight:600}
+.pill .v{font-family:var(--mono);font-weight:700;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.pill .v.in{color:#5fe0b2} .pill .v.out{color:#ffb39b}
+.ring{width:190px;height:190px;border-radius:50%;display:grid;place-items:center;position:relative;background:var(--hero-line)}
+.ring::after{content:"";position:absolute;inset:22px;border-radius:50%;background:var(--hero)}
+.ring .c{position:relative;z-index:1;text-align:center}
+.ring .p{font-family:var(--display);font-weight:700;font-size:1.9rem;letter-spacing:-.02em}
+.ring .s{font-size:.75rem;color:var(--hero-muted);max-width:110px;line-height:1.3}
+
+.banner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;background:var(--surface);border:1px dashed var(--accent);border-radius:14px;padding:10px 16px;font-size:.9rem}
+.banner b{color:var(--accent)}
+
+/* cards */
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:18px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;min-width:0}
+.card h2{font-family:var(--display);font-weight:700;font-size:1rem;letter-spacing:-.01em;margin:0}
+.card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
+
+/* form */
+form{display:grid;gap:14px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--surface-2);border-radius:12px;padding:4px}
+.seg label{position:relative;text-align:center;padding:9px;border-radius:9px;cursor:pointer;font-weight:700;color:var(--muted);transition:background .15s,color .15s}
+.seg input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.seg label:has(input:checked){background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(10,15,40,.12)}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent)}
+.amount{display:flex;align-items:baseline;gap:6px;border-bottom:2px solid var(--line);padding:4px 2px 8px;transition:border-color .15s}
+.amount:focus-within{border-color:var(--accent)}
+.amount span{font-family:var(--display);font-size:1.6rem;color:var(--muted)}
+.amount input{border:0;background:transparent;font-family:var(--display);font-weight:700;font-size:2rem;width:100%;min-width:0;outline:none;letter-spacing:-.02em}
+.amount input::placeholder{color:var(--line)}
+.lbl{font-size:.75rem;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{position:relative;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:600;cursor:pointer;background:var(--surface);transition:border-color .15s,background .15s}
+.chip input{position:absolute;opacity:0;inset:0;cursor:pointer;margin:0}
+.chip:hover{border-color:var(--muted)}
+.chip:has(input:checked){background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chip:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.sw{width:9px;height:9px;border-radius:3px;flex:none}
+.row2{display:grid;grid-template-columns:1fr 1.4fr;gap:10px}
+.field{display:grid;gap:5px;min-width:0}
+.field input{background:var(--surface-2);border:1px solid transparent;border-radius:10px;padding:10px 12px;width:100%;min-width:0}
+.field input:focus{border-color:var(--accent);outline:none}
+.btn{border:0;border-radius:12px;padding:13px 16px;font-weight:700;cursor:pointer;background:var(--accent);color:var(--accent-ink);transition:transform .1s,filter .15s}
+.btn:hover{filter:brightness(1.06)} .btn:active{transform:scale(.98)}
+.btn.sm{padding:8px 13px;font-size:.85rem;border-radius:10px}
+.btn.ghost{background:var(--surface-2);color:var(--ink)}
+.btn.danger{background:transparent;color:var(--expense);border:1px solid var(--line)}
+.btn.danger.armed{background:var(--expense);color:#fff;border-color:var(--expense)}
+.status{font-size:.85rem;color:var(--muted);min-height:1.3em}
+
+/* categories */
+.cats{display:grid;gap:14px}
+.cat-top{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.92rem}
+.cat-top .n{display:flex;align-items:center;gap:8px;font-weight:600;min-width:0}
+.cat-top .m{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.88rem;white-space:nowrap}
+.cat-top .m small{color:var(--muted);font-size:.8rem}
+.track{height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-top:6px}
+.track i{display:block;height:100%;border-radius:99px}
+.over{color:var(--expense);font-size:.78rem;font-weight:700;margin-top:3px}
+.limit{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:.8rem;color:var(--muted)}
+.limit input{width:110px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-family:var(--mono)}
+.empty{color:var(--muted);font-size:.92rem;margin:0}
+
+/* ledger */
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.f{border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 12px;font-size:.82rem;font-weight:600;color:var(--muted);cursor:pointer}
+.f[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.day{margin-top:6px}
+.day-h{display:flex;justify-content:space-between;font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:12px 0 6px;border-bottom:1px solid var(--line)}
+.day-h span:last-child{font-family:var(--mono);letter-spacing:0}
+.tx{display:grid;grid-template-columns:38px minmax(0,1fr) auto 32px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.tx:last-child{border-bottom:0}
+.ico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:.9rem;color:#fff}
+.tx .t{min-width:0}
+.tx .t b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tx .t small{color:var(--muted)}
+.tx .a{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tx .a.in{color:var(--income)}
+.del{border:0;background:transparent;color:var(--muted);width:32px;height:32px;border-radius:9px;cursor:pointer;font-size:1.1rem}
+.del:hover{background:var(--surface-2);color:var(--expense)}
+.tag{display:inline-block;font-size:.66rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);border:1px solid currentColor;border-radius:5px;padding:0 5px;margin-left:6px;vertical-align:1px}
+.sample{opacity:.75}
+
+/* backup */
+.backup{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
+.backup p{margin:4px 0 0;color:var(--muted);font-size:.88rem;max-width:52ch}
+.backup .acts{display:flex;flex-wrap:wrap;gap:8px}
+.file-btn{position:relative;overflow:hidden}
+.file-btn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+@media (max-width:760px){
+  .cols{grid-template-columns:minmax(0,1fr)}
+  .hero{grid-template-columns:minmax(0,1fr);padding:22px 20px}
+  .ring{width:160px;height:160px;justify-self:center}
+  .pill{flex:1;min-width:0}
+}
+@media (prefers-reduced-motion:no-preference){
+  .track i{transition:width .4s cubic-bezier(.2,.8,.2,1)}
+  .hero{animation:rise .5s cubic-bezier(.2,.8,.2,1)}
+  @keyframes rise{from{transform:translateY(6px)}to{transform:none}}
+}
+
+/* auth */
+.auth{min-height:100vh;display:grid;place-items:center;padding-block:32px;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
+.auth-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:28px;display:grid;gap:18px}
+.auth-hero{background:var(--hero);color:var(--hero-ink);border-radius:16px;padding:20px;position:relative;overflow:hidden}
+.auth-hero::before{content:"";position:absolute;inset:0;background-image:radial-gradient(var(--hero-line) 1px,transparent 1.2px);background-size:16px 16px;opacity:.6}
+.auth-hero>*{position:relative}
+.auth-hero h1{font-family:var(--display);font-weight:800;font-size:1.6rem;letter-spacing:-.02em;margin:0 0 4px}
+.auth-hero p{margin:0;color:var(--hero-muted);font-size:.9rem}
+.auth form{gap:12px}
+.auth .err{color:var(--expense);font-size:.88rem;min-height:1.2em;margin:0}
+.auth .ok{color:var(--income)}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:700;cursor:pointer;padding:0;font-size:.88rem}
+.center{text-align:center;color:var(--muted);font-size:.88rem}
+.loading{min-height:100vh;display:grid;place-items:center;color:var(--muted)}
+.me{display:flex;align-items:center;gap:8px}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:.85rem}
+.top-r{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+</style>
+</head>
+<body>
+<div class="loading" id="loading">Duke u ngarkuar…</div>
+
+<main class="auth" id="auth" hidden>
+  <div class="auth-card">
+    <div class="auth-hero"><h1>Buxheti Im</h1><p>Të ardhurat, faturat dhe shpenzimet e tua, kudo që je.</p></div>
+    <div class="seg" role="tablist" aria-label="Hyr ose regjistrohu">
+      <label><input type="radio" name="mode" id="mLogin" value="login" checked>Hyr</label>
+      <label><input type="radio" name="mode" id="mSignup" value="signup">Krijo llogari</label>
+    </div>
+    <form id="authForm" novalidate>
+      <label class="field" id="nameField" hidden><span class="lbl">Emri</span><input id="aName" type="text" autocomplete="name" maxlength="40" placeholder="p.sh. Arlinda"></label>
+      <label class="field"><span class="lbl">Email</span><input id="aEmail" type="email" autocomplete="email" placeholder="emri@gmail.com"></label>
+      <label class="field"><span class="lbl">Password</span><input id="aPass" type="password" autocomplete="current-password" placeholder="të paktën 6 shkronja"></label>
+      <p class="err" id="aErr" aria-live="polite"></p>
+      <button class="btn" id="aBtn" type="submit">Hyr</button>
+      <p class="center" id="forgotRow"><button class="linkbtn" id="forgot" type="button">E harrove password-in?</button></p>
+    </form>
+  </div>
+</main>
+
+<div class="wrap" id="app" hidden>
+
+  <div class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12" fill="none" stroke="var(--line)" stroke-width="6"/><circle cx="16" cy="16" r="12" fill="none" stroke="var(--accent)" stroke-width="6" stroke-dasharray="46 100" stroke-linecap="round" transform="rotate(-90 16 16)"/></svg>
+      Buxheti Im
+    </div>
+    <div class="top-r">
+    <nav class="month" aria-label="Zgjidh muajin">
+      <button id="prev" type="button" aria-label="Muaji i kaluar">‹</button>
+      <span id="monthLabel">—</span>
+      <button id="next" type="button" aria-label="Muaji tjetër">›</button>
+      <button id="todayBtn" class="today" type="button">Sot</button>
+    </nav>
+    <div class="me"><span class="avatar" id="avatar">A</span><button class="btn sm ghost" id="logout" type="button">Dil</button></div>
+    </div>
+  </div>
+
+  <section class="hero" aria-label="Përmbledhja e muajit">
+    <div>
+      <div class="eyebrow" id="heroLabel">Të mbetura</div>
+      <div class="big" id="left">$0.00</div>
+      <p class="verdict" id="verdict">&nbsp;</p>
+      <div class="pair">
+        <div class="pill"><div class="k">↑ Të ardhurat</div><div class="v in" id="tin">$0.00</div></div>
+        <div class="pill"><div class="k">↓ Shpenzimet</div><div class="v out" id="tout">$0.00</div></div>
+      </div>
+    </div>
+    <div class="ring" id="ring" role="img" aria-label="Ndarja e shpenzimeve sipas kategorive">
+      <div class="c"><div class="p" id="ringP">—</div><div class="s" id="ringS">e të ardhurave u shpenzua</div></div>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section class="card">
+      <div class="card-head"><h2>Shto një hyrje</h2></div>
+      <form id="form" novalidate>
+        <div class="seg" role="radiogroup" aria-label="Lloji">
+          <label><input type="radio" name="kind" id="kOut" value="out" checked>Shpenzim</label>
+          <label><input type="radio" name="kind" id="kIn" value="in">Të ardhura</label>
+        </div>
+        <label class="amount" for="amount"><span>$</span><input id="amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" aria-label="Shuma"></label>
+        <div>
+          <div class="lbl" id="catLbl">Kategoria</div>
+          <div class="chips" id="chips" role="radiogroup" aria-labelledby="catLbl"></div>
+        </div>
+        <div class="row2">
+          <label class="field"><span class="lbl">Data</span><input id="date" type="date"></label>
+          <label class="field"><span class="lbl">Shënim</span><input id="note" type="text" maxlength="60" placeholder="p.sh. Con Edison"></label>
+        </div>
+        <button class="btn" id="addBtn" type="submit">Shto shpenzimin</button>
+        <div class="status" id="status" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Ku shkojnë paratë</h2>
+        <button class="btn sm ghost" id="limitsBtn" type="button" aria-pressed="false">Cakto limitet</button>
+      </div>
+      <div class="cats" id="cats"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Hyrjet e muajit</h2>
+      <div class="filters" id="filters">
+        <button class="f" type="button" data-f="all" aria-pressed="true">Të gjitha</button>
+        <button class="f" type="button" data-f="in" aria-pressed="false">Të ardhura</button>
+        <button class="f" type="button" data-f="out" aria-pressed="false">Shpenzime</button>
+      </div>
+    </div>
+    <div id="ledger"></div>
+  </section>
+
+  <section class="card backup">
+    <div>
+      <h2>Të dhënat e tua</h2>
+      <p id="acctLine">Ruhen në llogarinë tënde dhe i sheh nga çdo pajisje. Askush tjetër s'i sheh.</p>
+    </div>
+    <div class="acts">
+      <button class="btn sm ghost" id="exportBtn" type="button">Shkarko backup</button>
+      <label class="btn sm ghost file-btn">Ngarko backup<input id="importFile" type="file" accept=".json,application/json"></label>
+      <button class="btn sm danger" id="wipeBtn" type="button">Fshi të gjitha</button>
+    </div>
+  </section>
+
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  updateProfile, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ====== FIREBASE ====== */
+const firebaseConfig = {
+  apiKey: "AIzaSyAE48OzwHXrRbOiP4rCAMRri54xrNQzT_U",
+  authDomain: "buxheti-57ba5.firebaseapp.com",
+  projectId: "buxheti-57ba5",
+  storageBucket: "buxheti-57ba5.firebasestorage.app",
+  messagingSenderId: "1046099491110",
+  appId: "1:1046099491110:web:bb8ecad4bd20c20ed0e9e7"
+};
+const fb = initializeApp(firebaseConfig);
+const auth = getAuth(fb);
+const db = getFirestore(fb);
+
+/* ====== KATEGORITË — ndrysho këtu sipas nevojës ====== */
+const CATS = {
+  out: [
+    { id:"rent",      name:"Qiraja",      color:"--c-rent" },
+    { id:"bills",     name:"Fatura",      color:"--c-bills" },
+    { id:"groceries", name:"Ushqime",     color:"--c-groceries" },
+    { id:"transport", name:"Transporti",  color:"--c-transport" },
+    { id:"dining",    name:"Restorante",  color:"--c-dining" },
+    { id:"health",    name:"Shëndeti",    color:"--c-health" },
+    { id:"shopping",  name:"Blerje",      color:"--c-shopping" },
+    { id:"other",     name:"Të tjera",    color:"--c-other" }
+  ],
+  in: [
+    { id:"salary",   name:"Rroga",        color:"--income" },
+    { id:"side",     name:"Punë anësore", color:"--income" },
+    { id:"other_in", name:"Të tjera",     color:"--income" }
+  ]
+};
+/* ===================================================== */
+
+const MONTHS=["Janar","Shkurt","Mars","Prill","Maj","Qershor","Korrik","Gusht","Shtator","Tetor","Nëntor","Dhjetor"];
+const DAYS=["E diel","E hënë","E martë","E mërkurë","E enjte","E premte","E shtunë"];
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+const money=n=>(n<0?"−":"")+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const valid=e=>e&&typeof e.id==="string"&&(e.kind==="in"||e.kind==="out")&&typeof e.amount==="number"&&e.amount>0&&/^\d{4}-\d{2}-\d{2}$/.test(e.date);
+
+let user=null, entries=[], limits={}, unsubs=[];
+const now=new Date();
+let view={y:now.getFullYear(),m:now.getMonth()};
+let filter="all", editingLimits=false;
+const ym=()=>view.y+"-"+pad(view.m+1);
+const cat=(kind,id)=>CATS[kind].find(c=>c.id===id)||{id,name:id,color:"--c-other"};
+const say=t=>{$("status").textContent=t};
+const entryRef=id=>doc(db,"users",user.uid,"entries",id);
+const userRef=()=>doc(db,"users",user.uid);
+
+/* ---------- screens ---------- */
+function show(which){
+  $("loading").hidden=which!=="loading";
+  $("auth").hidden=which!=="auth";
+  $("app").hidden=which!=="app";
+}
+
+onAuthStateChanged(auth,u=>{
+  unsubs.forEach(f=>f()); unsubs=[];
+  user=u; entries=[]; limits={};
+  if(!u){show("auth");return}
+  const name=u.displayName||u.email.split("@")[0];
+  $("avatar").textContent=name.charAt(0).toUpperCase();
+  $("avatar").title=name+" · "+u.email;
+  show("app"); render();
+  unsubs.push(onSnapshot(collection(db,"users",u.uid,"entries"),snap=>{
+    entries=snap.docs.map(d=>({id:d.id,...d.data()})).filter(valid); render();
+  },err=>say("S'po lidhem me databazën ("+err.code+").")));
+  unsubs.push(onSnapshot(userRef(),snap=>{
+    const d=snap.data(); limits=(d&&d.limits)||{}; render();
+  },()=>{}));
+});
+
+/* ---------- auth form ---------- */
+const mode=()=>document.querySelector('input[name=mode]:checked').value;
+function syncMode(){
+  const s=mode()==="signup";
+  $("nameField").hidden=!s; $("forgotRow").hidden=s;
+  $("aBtn").textContent=s?"Krijo llogarinë":"Hyr";
+  $("aPass").autocomplete=s?"new-password":"current-password";
+  $("aErr").textContent=""; $("aErr").classList.remove("ok");
+}
+document.querySelectorAll('input[name=mode]').forEach(r=>r.addEventListener("change",syncMode));
+const AUTH_ERR={
+  "auth/invalid-credential":"Email-i ose password-i është gabim.",
+  "auth/wrong-password":"Password-i është gabim.",
+  "auth/user-not-found":"S'ka llogari me këtë email.",
+  "auth/email-already-in-use":"Ky email ka llogari tashmë. Kliko “Hyr”.",
+  "auth/weak-password":"Password-i duhet të ketë të paktën 6 shkronja.",
+  "auth/invalid-email":"Email-i nuk duket i saktë.",
+  "auth/missing-password":"Shkruaj password-in.",
+  "auth/too-many-requests":"Shumë tentime. Provo pas pak minutash.",
+  "auth/network-request-failed":"S'ka internet. Kontrollo lidhjen.",
+  "auth/unauthorized-domain":"Ky website s'është i lejuar në Firebase (Authorized domains)."
+};
+$("authForm").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const email=$("aEmail").value.trim(), pass=$("aPass").value, err=$("aErr");
+  err.classList.remove("ok"); err.textContent="";
+  $("aBtn").disabled=true;
+  try{
+    if(mode()==="signup"){
+      const name=$("aName").value.trim();
+      if(!name){err.textContent="Shkruaj emrin.";return}
+      const cred=await createUserWithEmailAndPassword(auth,email,pass);
+      await updateProfile(cred.user,{displayName:name});
+      $("avatar").textContent=name.charAt(0).toUpperCase();
+    } else {
+      await signInWithEmailAndPassword(auth,email,pass);
+    }
+  }catch(e){err.textContent=AUTH_ERR[e.code]||"Diçka shkoi keq ("+e.code+")."}
+  finally{$("aBtn").disabled=false}
+});
+$("forgot").onclick=async()=>{
+  const email=$("aEmail").value.trim(), err=$("aErr");
+  if(!email){err.classList.remove("ok");err.textContent="Shkruaj email-in lart, pastaj kliko sërish.";$("aEmail").focus();return}
+  try{await sendPasswordResetEmail(auth,email);err.classList.add("ok");err.textContent="Të dërguam një email për ta ndryshuar password-in."}
+  catch(e){err.classList.remove("ok");err.textContent=AUTH_ERR[e.code]||"S'u dërgua ("+e.code+")."}
+};
+$("logout").onclick=()=>signOut(auth);
+
+/* ---------- form ---------- */
+const kind=()=>document.querySelector('input[name=kind]:checked').value;
+function fillChips(){
+  const k=kind(), box=$("chips"); box.innerHTML="";
+  CATS[k].forEach((c,i)=>{
+    const l=document.createElement("label"); l.className="chip";
+    l.innerHTML=`<input type="radio" name="cat" value="${c.id}"${i===0?" checked":""}><span class="sw" style="background:var(${c.color})"></span>`;
+    l.append(c.name); box.append(l);
+  });
+  $("addBtn").textContent=k==="in"?"Shto të ardhurat":"Shto shpenzimin";
+}
+
+/* ---------- render ---------- */
+function render(){
+  if(!user)return;
+  const month=entries.filter(e=>e.date.slice(0,7)===ym());
+  const tin=month.filter(e=>e.kind==="in").reduce((a,e)=>a+e.amount,0);
+  const tout=month.filter(e=>e.kind==="out").reduce((a,e)=>a+e.amount,0);
+  const left=tin-tout;
+
+  $("monthLabel").textContent=MONTHS[view.m]+" "+view.y;
+  $("heroLabel").textContent="Të mbetura · "+MONTHS[view.m];
+  $("left").textContent=money(left);
+  $("left").classList.toggle("neg",left<0);
+  $("tin").textContent=money(tin);
+  $("tout").textContent=money(tout);
+  $("verdict").textContent=
+    !month.length?"Ende asnjë hyrje për këtë muaj.":
+    tin===0?"Shto të ardhurat që të shohësh sa të mbeten.":
+    left<0?"Ke shpenzuar "+money(-left)+" më shumë se sa ke marrë.":
+    "Po kursen "+Math.round(left/tin*100)+"% të të ardhurave.";
+
+  const byCat=CATS.out.map(c=>({c,t:month.filter(e=>e.kind==="out"&&e.cat===c.id).reduce((a,e)=>a+e.amount,0)}));
+  const used=byCat.filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
+  const base=Math.max(tin,tout);
+  if(base>0&&tout>0){
+    let acc=0; const segs=used.map(({c,t})=>{const s=acc;acc+=t/base*100;return `var(${c.color}) ${s.toFixed(2)}% ${acc.toFixed(2)}%`});
+    segs.push(`var(--hero-line) ${acc.toFixed(2)}% 100%`);
+    $("ring").style.background=`conic-gradient(${segs.join(",")})`;
+  } else $("ring").style.background="var(--hero-line)";
+  $("ringP").textContent=tin>0?Math.round(tout/tin*100)+"%":"—";
+  $("ringS").textContent=tin>0?"e të ardhurave u shpenzua":"pa të ardhura këtë muaj";
+
+  const cats=$("cats"); cats.innerHTML="";
+  const list=editingLimits?byCat:byCat.filter(x=>x.t>0||limits[x.c.id]).sort((a,b)=>b.t-a.t);
+  if(!list.length) cats.innerHTML=`<p class="empty">Asnjë shpenzim këtë muaj ende.</p>`;
+  const maxT=Math.max(1,...list.map(x=>x.t));
+  for(const {c,t} of list){
+    const lim=limits[c.id]||0;
+    const pct=lim?Math.min(100,t/lim*100):t/maxT*100;
+    const over=lim&&t>lim;
+    const d=document.createElement("div");
+    d.innerHTML=`<div class="cat-top"><span class="n"><span class="sw" style="background:var(${c.color})"></span><span></span></span>
+      <span class="m">${money(t)}${lim?` <small>/ ${money(lim)}</small>`:""}</span></div>
+      <div class="track"><i style="width:${pct.toFixed(1)}%;background:var(${over?"--expense":c.color})"></i></div>
+      ${over?`<div class="over">${money(t-lim)} mbi limit</div>`:""}`;
+    d.querySelector(".n span:last-child").textContent=c.name;
+    if(editingLimits){
+      const w=document.createElement("label"); w.className="limit"; w.textContent="Limiti mujor $";
+      const inp=document.createElement("input"); inp.type="number"; inp.min="0"; inp.step="1"; inp.id="lim-"+c.id;
+      inp.placeholder="pa limit"; inp.value=lim||"";
+      inp.addEventListener("change",async()=>{
+        const v=parseFloat(inp.value), next={...limits};
+        if(v>0)next[c.id]=v; else delete next[c.id];
+        limits=next; render(); const n=$("lim-"+c.id); if(n)n.focus();
+        try{await setDoc(userRef(),{limits:next})}catch(_){say("Limiti s'u ruajt. Provo përsëri.")}
+      });
+      w.append(inp); d.append(w);
+    }
+    cats.append(d);
+  }
+
+  const shown=month.filter(e=>filter==="all"||e.kind===filter).sort((a,b)=>b.date.localeCompare(a.date)||((b.created||0)-(a.created||0)));
+  const led=$("ledger"); led.innerHTML="";
+  if(!shown.length){led.innerHTML=`<p class="empty">Asgjë për të treguar.</p>`;return}
+  const groups={}; shown.forEach(e=>(groups[e.date]=groups[e.date]||[]).push(e));
+  for(const date of Object.keys(groups)){
+    const [y,m,dd]=date.split("-").map(Number); const dt=new Date(y,m-1,dd);
+    const net=groups[date].reduce((a,e)=>a+(e.kind==="in"?e.amount:-e.amount),0);
+    const g=document.createElement("div"); g.className="day";
+    g.innerHTML=`<div class="day-h"><span>${DAYS[dt.getDay()]}, ${dd} ${MONTHS[m-1]}</span><span>${net>0?"+":""}${money(net)}</span></div>`;
+    for(const e of groups[date]){
+      const c=cat(e.kind,e.cat);
+      const r=document.createElement("div"); r.className="tx";
+      r.innerHTML=`<div class="ico" style="background:var(${c.color})"></div><div class="t"><b></b><small></small></div><div class="a ${e.kind}">${e.kind==="in"?"+":"−"}${money(e.amount)}</div><div></div>`;
+      r.querySelector(".ico").textContent=c.name.charAt(0);
+      r.querySelector("b").textContent=e.note||c.name;
+      r.querySelector("small").textContent=c.name;
+      const b=document.createElement("button"); b.className="del"; b.type="button"; b.textContent="×";
+      b.setAttribute("aria-label","Fshi "+(e.note||c.name));
+      b.onclick=async()=>{try{await deleteDoc(entryRef(e.id));say("U fshi.")}catch(_){say("S'u fshi. Provo përsëri.")}};
+      r.lastElementChild.append(b);
+      g.append(r);
+    }
+    led.append(g);
+  }
+}
+
+/* ---------- events ---------- */
+$("form").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const amount=Math.round(parseFloat($("amount").value)*100)/100;
+  const date=$("date").value;
+  if(!(amount>0)){say("Shkruaj një shumë më të madhe se 0.");$("amount").focus();return}
+  if(!date){say("Zgjidh datën.");$("date").focus();return}
+  const c=document.querySelector('input[name=cat]:checked');
+  const ref=doc(collection(db,"users",user.uid,"entries"));
+  const body={kind:kind(),cat:c?c.value:"other",amount,date,note:$("note").value.trim(),created:Date.now()};
+  const [y,m]=date.split("-").map(Number); view={y,m:m-1};
+  $("amount").value=""; $("note").value=""; $("amount").focus();
+  try{
+    await setDoc(ref,body);
+    say("U shtua "+money(amount)+".");
+  }catch(_){say("S'u ruajt. Kontrollo internetin dhe provo përsëri.")}
+});
+
+document.querySelectorAll('input[name=kind]').forEach(r=>r.addEventListener("change",fillChips));
+$("prev").onclick=()=>{if(--view.m<0){view.m=11;view.y--}render()};
+$("next").onclick=()=>{if(++view.m>11){view.m=0;view.y++}render()};
+$("todayBtn").onclick=()=>{view={y:now.getFullYear(),m:now.getMonth()};render()};
+$("filters").addEventListener("click",ev=>{
+  const b=ev.target.closest(".f"); if(!b)return; filter=b.dataset.f;
+  document.querySelectorAll(".f").forEach(x=>x.setAttribute("aria-pressed",String(x===b))); render();
+});
+$("limitsBtn").onclick=()=>{
+  editingLimits=!editingLimits;
+  $("limitsBtn").setAttribute("aria-pressed",String(editingLimits));
+  $("limitsBtn").textContent=editingLimits?"Mbaro":"Cakto limitet"; render();
+};
+
+/* ---------- backup ---------- */
+$("exportBtn").onclick=()=>{
+  const blob=new Blob([JSON.stringify({app:"buxheti",version:2,exported:new Date().toISOString(),entries,limits},null,2)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="buxheti-backup-"+iso(new Date())+".json";
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  say("Backup-i u shkarkua.");
+};
+async function commitInChunks(ops){
+  for(let i=0;i<ops.length;i+=400){const b=writeBatch(db); ops.slice(i,i+400).forEach(fn=>fn(b)); await b.commit()}
+}
+$("importFile").addEventListener("change",ev=>{
+  const f=ev.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=async()=>{
+    try{
+      const d=JSON.parse(rd.result); const inc=(Array.isArray(d)?d:d.entries||[]).filter(valid);
+      await commitInChunks(inc.map(e=>b=>{const {id,...body}=e;b.set(entryRef(id),body)}));
+      if(d.limits&&typeof d.limits==="object") await setDoc(userRef(),{limits:{...limits,...d.limits}});
+      say("U ngarkuan "+inc.length+" hyrje nga backup-i.");
+    }catch(_){say("Ky file nuk është backup i Buxhetit, ose s'u ruajt.")}
+    ev.target.value="";
+  };
+  rd.readAsText(f);
+});
+let armTimer;
+$("wipeBtn").onclick=async()=>{
+  const b=$("wipeBtn");
+  if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Kliko sërish për t'i fshirë";clearTimeout(armTimer);armTimer=setTimeout(()=>{b.classList.remove("armed");b.textContent="Fshi të gjitha"},4000);return}
+  clearTimeout(armTimer); b.classList.remove("armed"); b.textContent="Fshi të gjitha";
+  try{await commitInChunks(entries.map(e=>bt=>bt.delete(entryRef(e.id))));await setDoc(userRef(),{limits:{}});say("Të gjitha hyrjet u fshinë.")}
+  catch(_){say("S'u fshinë. Provo përsëri.")}
+};
+
+$("date").value=iso(now);
+fillChips(); syncMode();
+</script>
+</body>
+</html>
