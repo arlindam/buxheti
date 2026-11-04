@@ -227,6 +227,7 @@ form{display:grid;gap:14px}
 .ctot .legend{margin-top:4px}
 .sel{appearance:none;-webkit-appearance:none;background:var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23646b82' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid transparent;border-radius:10px;padding:10px 30px 10px 12px;width:100%;font-weight:600}
 .sel:focus{border-color:var(--accent);outline:none}
+.pill .v.sav{color:#ffd27a}
 .lock-note{margin:0;font-size:.8rem;color:var(--muted);line-height:1.45;background:var(--surface-2);border-radius:12px;padding:10px 12px}
 </style>
 </head>
@@ -295,6 +296,7 @@ form{display:grid;gap:14px}
       <div class="pair">
         <div class="pill"><div class="k">↑ Të ardhurat</div><div class="v in" id="tin">0,00 €</div></div>
         <div class="pill"><div class="k">↓ Shpenzimet</div><div class="v out" id="tout">0,00 €</div></div>
+        <div class="pill" id="savPill" hidden><div class="k">◆ Kursimet</div><div class="v sav" id="tsav">0,00 €</div></div>
       </div>
     </div>
     <div class="ring" id="ring" role="img" aria-label="Ndarja e shpenzimeve sipas kategorive">
@@ -316,6 +318,7 @@ form{display:grid;gap:14px}
           <div class="lbl" id="catLbl">Kategoria</div>
           <div class="chips" id="chips" role="radiogroup" aria-labelledby="catLbl"></div>
         </div>
+        <label class="field" id="entAccField"><span class="lbl" id="entAccLbl">Nga llogaria</span><select id="entAcc" class="sel"></select></label>
         <div class="row2">
           <label class="field"><span class="lbl">Data</span><input id="date" type="date"></label>
           <label class="field"><span class="lbl">Shënim</span><input id="note" type="text" maxlength="60" placeholder="p.sh. KEDS"></label>
@@ -656,7 +659,7 @@ async function startApp(){
     const ver=++accVer, out=[];
     for(const d of snap.docs){const raw=d.data(); if(isSealed(raw)){try{out.push({id:d.id,...await unseal(raw)})}catch(_){}}}
     if(ver!==accVer)return;
-    accounts=out.filter(a=>typeof a.balance==="number"&&a.name); renderBalance();
+    accounts=out.filter(a=>typeof a.balance==="number"&&a.name); fillEntAcc(); renderBalance(); render();
   },()=>{}));
   unsubs.push(onSnapshot(collection(db,"users",user.uid,"entries"),async snap=>{
     const ver=++snapVer, out=[], legacy=[];
@@ -666,7 +669,7 @@ async function startApp(){
       else {out.push({id:d.id,...raw}); legacy.push({id:d.id,...raw})}
     }
     if(ver!==snapVer)return;
-    entries=out.filter(valid); render();
+    entries=out.filter(valid); render(); renderBalance();
     // hyrjet e vjetra (pa enkriptim) enkriptohen automatikisht
     for(const e of legacy.filter(valid)){const {id,...body}=e; try{await setDoc(entryRef(id),await seal(body))}catch(_){}}
   },err=>say("S'po lidhem me databazën ("+err.code+").")));
@@ -824,22 +827,35 @@ function fillChips(){
 /* ---------- render ---------- */
 function render(){
   if(!user||!KEY)return;
-  const month=entries.filter(e=>e.date.slice(0,7)===ym());
+  const month=entries.filter(e=>e.date.slice(0,7)===ym()&&entCur(e)===CUR);
   const tin=month.filter(e=>e.kind==="in").reduce((a,e)=>a+e.amount,0);
   const tout=month.filter(e=>e.kind==="out").reduce((a,e)=>a+e.amount,0);
   const left=tin-tout;
 
   $("monthLabel").textContent=MONTHS[view.m]+" "+view.y;
-  $("heroLabel").textContent="Të mbetura · "+MONTHS[view.m];
-  $("left").textContent=money(left);
-  $("left").classList.toggle("neg",left<0);
   $("tin").textContent=money(tin);
   $("tout").textContent=money(tout);
-  $("verdict").textContent=
-    !month.length?"Ende asnjë hyrje për këtë muaj.":
-    tin===0?"Shto të ardhurat që të shohësh sa të mbeten.":
-    left<0?"Ke shpenzuar "+money(-left)+" më shumë se sa ke marrë.":
-    "Po kursen "+Math.round(left/tin*100)+"% të të ardhurave.";
+  const mine=accounts.filter(a=>accCur(a)===CUR);
+  if(accounts.length){
+    // si bankë: paratë që ke tani në bankë + cash, kursimet veç
+    const avail=mine.filter(a=>accType(a.type).id!=="savings").reduce((s,a)=>s+curBal(a),0);
+    const sav=mine.filter(a=>accType(a.type).id==="savings").reduce((s,a)=>s+curBal(a),0);
+    const hasSav=accounts.some(a=>accType(a.type).id==="savings");
+    $("heroLabel").textContent="Të mbetura · tani";
+    $("left").textContent=money(avail); $("left").classList.toggle("neg",avail<0);
+    $("savPill").hidden=!hasSav; $("tsav").textContent=money(sav);
+    const others=[...new Set(accounts.map(accCur))].filter(c=>c!==CUR).map(c=>moneyIn(accounts.filter(a=>accCur(a)===c&&accType(a.type).id!=="savings").reduce((s,a)=>s+curBal(a),0),c));
+    $("verdict").textContent="Në bankë dhe cash"+(others.length?" · plus "+others.join(", "):"")+". Këtë muaj: +"+money(tin)+" / −"+money(tout)+".";
+  } else {
+    $("savPill").hidden=true;
+    $("heroLabel").textContent="Të mbetura · "+MONTHS[view.m];
+    $("left").textContent=money(left); $("left").classList.toggle("neg",left<0);
+    $("verdict").textContent=
+      !month.length?"Ende asnjë hyrje për këtë muaj. Shto balancën te tab-i Balanca që ta shohësh totalin tënd.":
+      tin===0?"Shto të ardhurat që të shohësh sa të mbeten.":
+      left<0?"Ke shpenzuar "+money(-left)+" më shumë se sa ke marrë.":
+      "Po kursen "+Math.round(left/tin*100)+"% të të ardhurave.";
+  }
 
   const byCat=CATS.out.map(c=>({c,t:month.filter(e=>e.kind==="out"&&e.cat===c.id).reduce((a,e)=>a+e.amount,0)}));
   const used=byCat.filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
@@ -881,22 +897,22 @@ function render(){
     cats.append(d);
   }
 
-  const shown=month.filter(e=>filter==="all"||e.kind===filter).sort((a,b)=>b.date.localeCompare(a.date)||((b.created||0)-(a.created||0)));
+  const shown=entries.filter(e=>e.date.slice(0,7)===ym()).filter(e=>filter==="all"||e.kind===filter).sort((a,b)=>b.date.localeCompare(a.date)||((b.created||0)-(a.created||0)));
   const led=$("ledger"); led.innerHTML="";
   if(!shown.length){led.innerHTML=`<p class="empty">Asgjë për të treguar.</p>`;return}
   const groups={}; shown.forEach(e=>(groups[e.date]=groups[e.date]||[]).push(e));
   for(const date of Object.keys(groups)){
     const [y,m,dd]=date.split("-").map(Number); const dt=new Date(y,m-1,dd);
-    const net=groups[date].reduce((a,e)=>a+(e.kind==="in"?e.amount:-e.amount),0);
+    const net=groups[date].filter(e=>entCur(e)===CUR).reduce((a,e)=>a+(e.kind==="in"?e.amount:-e.amount),0);
     const g=document.createElement("div"); g.className="day";
     g.innerHTML=`<div class="day-h"><span>${DAYS[dt.getDay()]}, ${dd} ${MONTHS[m-1]}</span><span>${net>0?"+":""}${money(net)}</span></div>`;
     for(const e of groups[date]){
       const c=cat(e.kind,e.cat);
       const r=document.createElement("div"); r.className="tx";
-      r.innerHTML=`<div class="ico" style="background:var(${c.color})"></div><div class="t"><b></b><small></small></div><div class="a ${e.kind}">${e.kind==="in"?"+":"−"}${money(e.amount)}</div><div></div>`;
+      r.innerHTML=`<div class="ico" style="background:var(${c.color})"></div><div class="t"><b></b><small></small></div><div class="a ${e.kind}">${e.kind==="in"?"+":"−"}${moneyIn(e.amount,entCur(e))}</div><div></div>`;
       r.querySelector(".ico").textContent=c.name.charAt(0);
       r.querySelector("b").textContent=e.note||c.name;
-      r.querySelector("small").textContent=c.name;
+      const la=e.acc&&accounts.find(x=>x.id===e.acc); r.querySelector("small").textContent=c.name+(la?" · "+la.name:"");
       const b=document.createElement("button"); b.className="del"; b.type="button"; b.textContent="×";
       b.setAttribute("aria-label","Fshi "+(e.note||c.name));
       b.onclick=async()=>{try{await deleteDoc(entryRef(e.id));say("U fshi.")}catch(_){say("S'u fshi. Provo përsëri.")}};
@@ -917,11 +933,13 @@ $("form").addEventListener("submit",async ev=>{
   const c=document.querySelector('input[name=cat]:checked');
   const ref=doc(collection(db,"users",user.uid,"entries"));
   const body={kind:kind(),cat:c?c.value:"other",amount,date,note:$("note").value.trim(),created:Date.now()};
+  const accSel=$("entAcc").value; if(accSel) body.acc=accSel;
   const [y,m]=date.split("-").map(Number); view={y,m:m-1};
   $("amount").value=""; $("note").value=""; $("amtHint").textContent=""; $("amount").focus();
   try{
     await setDoc(ref,await seal(body));
-    say("U shtua "+money(amount)+".");
+    const la=body.acc&&accounts.find(x=>x.id===body.acc);
+    say("U shtua "+moneyIn(amount,la?accCur(la):CUR)+(la?(body.kind==="in"?" në ":" nga ")+la.name:"")+".");
   }catch(_){say("S'u ruajt. Kontrollo internetin dhe provo përsëri.")}
 });
 
@@ -976,13 +994,32 @@ $("wipeBtn").onclick=async()=>{
   catch(_){say("S'u fshinë. Provo përsëri.")}
 };
 
+/* ---------- llogaria te hyrja ---------- */
+function fillEntAcc(){
+  const sel=$("entAcc"), prev=sel.value||(()=>{try{return localStorage.getItem("buxheti-entacc")||""}catch(_){return ""}})();
+  sel.innerHTML="";
+  const none=document.createElement("option"); none.value=""; none.textContent=accounts.length?"Pa llogari (s'e ndryshon balancën)":"Shto llogari te Balanca"; sel.append(none);
+  const order=ACC_TYPES.map(t=>t.id);
+  [...accounts].sort((a,b)=>order.indexOf(accType(a.type).id)-order.indexOf(accType(b.type).id)||a.name.localeCompare(b.name)).forEach(a=>{
+    const o=document.createElement("option"); o.value=a.id; o.textContent=a.name+" · "+accType(a.type).name+" · "+accCur(a); sel.append(o)});
+  sel.value=accounts.some(a=>a.id===prev)?prev:(accounts.find(a=>accType(a.type).id!=="savings")||{}).id||"";
+  syncEntAcc();
+}
+function syncEntAcc(){
+  const a=accounts.find(x=>x.id===$("entAcc").value);
+  $("entAccLbl").textContent=kind()==="in"?"Në llogarinë":"Nga llogaria";
+  document.querySelectorAll(".cur-sym").forEach(e=>e.textContent=a?(CURRENCIES.find(c=>c.code===accCur(a))||curInfo()).sym:curInfo().sym);
+  $("amount").dispatchEvent(new Event("input"));
+}
+$("entAcc").onchange=()=>{try{localStorage.setItem("buxheti-entacc",$("entAcc").value)}catch(_){} syncEntAcc()};
+document.querySelectorAll('input[name=kind]').forEach(r=>r.addEventListener("change",syncEntAcc));
+
 /* ---------- monedha ---------- */
 (function(){const sel=$("curSel");CURRENCIES.forEach(c=>{const o=document.createElement("option");o.value=c.code;o.textContent=c.sym+" "+c.code;o.title=c.name;sel.append(o)});sel.value=CUR})();
 function applyCur(code,save){
   CUR=code; $("curSel").value=code;
   try{localStorage.setItem("buxheti-cur",code)}catch(_){}
-  document.querySelectorAll(".cur-sym").forEach(e=>e.textContent=curInfo().sym);
-  setPh();
+  setPh(); syncEntAcc();
   ["amount","accBal"].forEach(id=>$(id).dispatchEvent(new Event("input")));
   render(); renderBalance();
   if(save&&user&&KEY) seal({cur:code}).then(x=>setDoc(userRef(),{prefs:x},{merge:true})).then(()=>say("Monedha: "+curInfo().name+". Shumat s'konvertohen, ndryshon vetëm shenja.")).catch(()=>{});
@@ -1006,9 +1043,15 @@ try{ if(localStorage.getItem("buxheti-tab")==="balance") setTab("balance") }catc
 /* ---------- balanca ---------- */
 const ACC_TYPES=[
   {id:"bank",name:"Bankë",color:"--c-bills"},
-  {id:"cash",name:"Cash",color:"--c-groceries"}
+  {id:"cash",name:"Cash",color:"--c-groceries"},
+  {id:"savings",name:"Kursime",color:"--c-transport"}
 ];
-const accType=id=>id==="cash"?ACC_TYPES[1]:ACC_TYPES[0];   // llojet e vjetra (kartelë, kursime) shfaqen si Bankë
+const accType=id=>id==="cash"?ACC_TYPES[1]:id==="savings"?ACC_TYPES[2]:ACC_TYPES[0];   // kartela e vjetër shfaqet si Bankë
+/* balanca e tanishme = balanca e shënuar + hyrjet e lidhura me këtë llogari që janë shtuar pas saj */
+function curBal(a){
+  return Math.round((a.balance+entries.filter(e=>e.acc===a.id&&(e.created||0)>(a.updated||0)).reduce((s,e)=>s+(e.kind==="in"?e.amount:-e.amount),0))*100)/100;
+}
+const entCur=e=>{const a=e.acc&&accounts.find(x=>x.id===e.acc);return a?accCur(a):CUR};
 const accCur=a=>a.cur||CUR;
 (function(){const sel=$("accCur");CURRENCIES.forEach(c=>{const o=document.createElement("option");o.value=c.code;o.textContent=c.sym+" "+c.code+" · "+c.name;sel.append(o)});sel.value=CUR;
   sel.onchange=()=>{$("accSym").textContent=(CURRENCIES.find(c=>c.code===sel.value)||CURRENCIES[0]).sym;$("accBal").dispatchEvent(new Event("input"))};$("accSym").textContent=curInfo().sym})();
@@ -1024,17 +1067,17 @@ function renderBalance(){
   if(!curs.length) curs.push(CUR);
   const box=$("balTotals"); box.innerHTML="";
   curs.forEach((code,i)=>{
-    const inCur=accounts.filter(a=>accCur(a)===code), tot=inCur.reduce((s,a)=>s+a.balance,0);
+    const inCur=accounts.filter(a=>accCur(a)===code), tot=inCur.reduce((s,a)=>s+curBal(a),0);
     const d=document.createElement("div"); d.className="ctot"+(i?" minor":"");
     const big=document.createElement("div"); big.className="big"+(tot<0?" neg":""); big.textContent=moneyIn(tot,code); d.append(big);
     const lg=document.createElement("div"); lg.className="legend";
-    ACC_TYPES.forEach(t=>{const v=inCur.filter(a=>accType(a.type).id===t.id).reduce((s,a)=>s+a.balance,0); if(!inCur.some(a=>accType(a.type).id===t.id))return;
+    ACC_TYPES.forEach(t=>{const v=inCur.filter(a=>accType(a.type).id===t.id).reduce((s,a)=>s+curBal(a),0); if(!inCur.some(a=>accType(a.type).id===t.id))return;
       const sp=document.createElement("span"); sp.innerHTML=`<span class="sw" style="background:var(${t.color})"></span>`; sp.append(t.name+" "); const b=document.createElement("b"); b.textContent=moneyIn(v,code); sp.append(b); lg.append(sp)});
     if(lg.childNodes.length) d.append(lg);
     box.append(d);
   });
   const last=accounts.reduce((m,x)=>Math.max(m,x.updated||0),0);
-  $("balNote").textContent=accounts.length?("Në "+accounts.length+" llogari"+(curs.length>1?" · "+curs.length+" monedha":"")+" · përditësuar "+shortDate(last)):"Shto llogarinë e parë: sa ke në bankë dhe sa cash.";
+  $("balNote").textContent=accounts.length?("Në "+accounts.length+" llogari"+(curs.length>1?" · "+curs.length+" monedha":"")+" · përditësuar "+shortDate(last)):"Shto sa ke në bankë, sa cash dhe sa kursime. Pastaj çdo shpenzim e të ardhur e ndryshon vetë balancën.";
 
   const list=$("accList"); list.innerHTML="";
   if(!accounts.length){list.innerHTML=`<p class="empty">Ende asnjë llogari. Shtoje të parën me formularin.</p>`;return}
@@ -1048,7 +1091,7 @@ function renderBalance(){
     const act=r.querySelector(".acc-act");
     if(editingAcc===a.id){
       const f=document.createElement("form"); f.className="acc-edit";
-      const inp=document.createElement("input"); inp.type="text"; inp.inputMode="decimal"; inp.autocomplete="off"; inp.id="accEdit-"+a.id; inp.value=toInput(a.balance); inp.setAttribute("aria-label","Balanca e re për "+a.name+" në "+accCur(a));
+      const inp=document.createElement("input"); inp.type="text"; inp.inputMode="decimal"; inp.autocomplete="off"; inp.id="accEdit-"+a.id; inp.value=toInput(curBal(a)); inp.setAttribute("aria-label","Balanca e re për "+a.name+" në "+accCur(a));
       const ok=document.createElement("button"); ok.className="mini go"; ok.type="submit"; ok.textContent="Ruaj";
       const no=document.createElement("button"); no.className="mini"; no.type="button"; no.textContent="Anulo"; no.onclick=()=>{editingAcc=null;renderBalance()};
       f.append(inp,ok,no);
@@ -1059,7 +1102,7 @@ function renderBalance(){
       r.querySelector(".a").replaceWith(f); act.remove();
       list.append(r); setTimeout(()=>{inp.focus();inp.select()},0); return;
     }
-    r.querySelector(".a").textContent=moneyIn(a.balance,accCur(a));
+    const cb=curBal(a); r.querySelector(".a").textContent=moneyIn(cb,accCur(a)); r.querySelector(".a").classList.toggle("neg",cb<0);
     const ed=document.createElement("button"); ed.className="mini"; ed.type="button"; ed.textContent="Ndrysho"; ed.setAttribute("aria-label","Ndrysho balancën e "+a.name);
     ed.onclick=()=>{editingAcc=a.id;renderBalance()};
     const del=document.createElement("button"); del.className="del"; del.type="button"; del.textContent="×"; del.setAttribute("aria-label","Fshi "+a.name);
@@ -1079,7 +1122,7 @@ $("accForm").addEventListener("submit",async ev=>{
   try{await setDoc(ref,await seal({name,type,cur,balance:bal,updated:Date.now()}));$("accStatus").textContent="U shtua: "+name+", "+moneyIn(bal,cur)}
   catch(_){$("accStatus").textContent="S'u ruajt. Kontrollo internetin dhe provo përsëri."}
 });
-hintFor("amount","amtHint"); hintFor("accBal","accHint",()=>$("accCur").value);
+hintFor("amount","amtHint",()=>{const a=accounts.find(x=>x.id===$("entAcc").value);return a?accCur(a):CUR}); hintFor("accBal","accHint",()=>$("accCur").value);
 
 $("date").value=iso(now);
 fillChips(); syncMode();
