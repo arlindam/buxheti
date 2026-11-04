@@ -190,6 +190,33 @@ form{display:grid;gap:14px}
 .ack{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
 .ack input{width:18px;height:18px;accent-color:var(--accent)}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;width:max-content;max-width:100%}
+.tab{border:0;background:transparent;padding:9px 20px;border-radius:10px;font-weight:700;color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--surface)}
+.tabpane{display:grid;gap:18px}
+.bal-hero{grid-template-columns:minmax(0,1fr)}
+.stack{display:flex;gap:3px;height:12px;border-radius:99px;overflow:hidden;margin-top:20px;background:var(--hero-line)}
+.stack i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:.85rem;color:var(--hero-muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend b{color:var(--hero-ink);font-family:var(--mono);font-weight:700}
+.acc{display:grid;grid-template-columns:38px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.acc:last-child{border-bottom:0}
+.acc .t{min-width:0}
+.acc .t b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acc .t small{color:var(--muted)}
+.acc .a{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.acc .a.neg{color:var(--expense)}
+.acc-act{display:flex;gap:4px;align-items:center}
+.mini{border:0;background:var(--surface-2);border-radius:8px;padding:6px 10px;font-size:.8rem;font-weight:700;cursor:pointer}
+.mini.go{background:var(--accent);color:var(--accent-ink)}
+.del.armed{background:var(--expense);color:#fff;width:auto;padding:0 10px;font-size:.8rem;font-weight:700}
+.acc-edit{display:flex;gap:6px;align-items:center}
+.acc-edit input{width:120px;background:var(--surface-2);border:1px solid var(--accent);border-radius:8px;padding:6px 8px;font-family:var(--mono)}
+.hint{font-size:.8rem;color:var(--muted);min-height:1.15em;margin:-8px 0 0}
+.face-btn{width:100%}
+.face-row{display:grid;gap:8px}
+@media (max-width:520px){.acc{grid-template-columns:38px minmax(0,1fr) auto}.acc-act{grid-column:2/-1;justify-content:flex-end}}
 .lock-note{margin:0;font-size:.8rem;color:var(--muted);line-height:1.45;background:var(--surface-2);border-radius:12px;padding:10px 12px}
 </style>
 </head>
@@ -204,6 +231,10 @@ form{display:grid;gap:14px}
       <label><input type="radio" name="mode" id="mSignup" value="signup">Krijo llogari</label>
     </div>
     <div id="unlockHead" hidden><h2 class="unlock-h">Hap të dhënat e tua</h2><p class="center">Të dhënat janë të enkriptuara. Shkruaj password-in që t'i hapësh në këtë pajisje.</p></div>
+    <div id="faceRow" class="face-row" hidden>
+      <button class="btn face-btn" id="faceUnlock" type="button">Hap me Face ID</button>
+      <p class="center">ose shkruaj password-in më poshtë</p>
+    </div>
     <form id="authForm" novalidate>
       <label class="field" id="nameField" hidden><span class="lbl">Emri</span><input id="aName" type="text" autocomplete="name" maxlength="40" placeholder="p.sh. Arlinda"></label>
       <label class="field"><span class="lbl">Email</span><input id="aEmail" type="email" autocomplete="email" placeholder="emri@gmail.com"></label>
@@ -240,6 +271,12 @@ form{display:grid;gap:14px}
     </div>
   </div>
 
+  <div class="tabs" role="tablist" aria-label="Pamjet">
+    <button class="tab" id="tabBtnBudget" role="tab" aria-selected="true" aria-controls="tabBudget" type="button">Buxheti</button>
+    <button class="tab" id="tabBtnBalance" role="tab" aria-selected="false" aria-controls="tabBalance" type="button">Balanca</button>
+  </div>
+
+  <div id="tabBudget" class="tabpane" role="tabpanel">
   <section class="hero" aria-label="Përmbledhja e muajit">
     <div>
       <div class="eyebrow" id="heroLabel">Të mbetura</div>
@@ -263,14 +300,15 @@ form{display:grid;gap:14px}
           <label><input type="radio" name="kind" id="kOut" value="out" checked>Shpenzim</label>
           <label><input type="radio" name="kind" id="kIn" value="in">Të ardhura</label>
         </div>
-        <label class="amount" for="amount"><span>€</span><input id="amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" aria-label="Shuma në euro"></label>
+        <label class="amount" for="amount"><span>€</span><input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="Shuma në euro"></label>
+        <p class="hint" id="amtHint"></p>
         <div>
           <div class="lbl" id="catLbl">Kategoria</div>
           <div class="chips" id="chips" role="radiogroup" aria-labelledby="catLbl"></div>
         </div>
         <div class="row2">
           <label class="field"><span class="lbl">Data</span><input id="date" type="date"></label>
-          <label class="field"><span class="lbl">Shënim</span><input id="note" type="text" maxlength="60" placeholder="p.sh. Con Edison"></label>
+          <label class="field"><span class="lbl">Shënim</span><input id="note" type="text" maxlength="60" placeholder="p.sh. KEDS"></label>
         </div>
         <button class="btn" id="addBtn" type="submit">Shto shpenzimin</button>
         <div class="status" id="status" aria-live="polite"></div>
@@ -297,6 +335,36 @@ form{display:grid;gap:14px}
     </div>
     <div id="ledger"></div>
   </section>
+  </div>
+
+  <div id="tabBalance" class="tabpane" role="tabpanel" hidden>
+    <section class="hero bal-hero" aria-label="Balanca momentale">
+      <div>
+        <div class="eyebrow">Balanca momentale</div>
+        <div class="big" id="balTotal">0,00 €</div>
+        <p class="verdict" id="balNote">&nbsp;</p>
+        <div class="stack" id="balStack" aria-hidden="true"></div>
+        <div class="legend" id="balLegend"></div>
+      </div>
+    </section>
+    <div class="cols">
+      <section class="card">
+        <div class="card-head"><h2>Llogaritë</h2></div>
+        <div id="accList"></div>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>Shto llogari</h2></div>
+        <form id="accForm" novalidate>
+          <div><div class="lbl" id="accTypeLbl">Lloji</div><div class="chips" id="accTypes" role="radiogroup" aria-labelledby="accTypeLbl"></div></div>
+          <label class="field"><span class="lbl">Emri</span><input id="accName" type="text" maxlength="40" placeholder="p.sh. ProCredit, Kuleta"></label>
+          <label class="amount" for="accBal"><span>€</span><input id="accBal" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="Balanca në euro"></label>
+          <p class="hint" id="accHint"></p>
+          <button class="btn" type="submit">Shto llogarinë</button>
+          <div class="status" id="accStatus" aria-live="polite"></div>
+        </form>
+      </section>
+    </div>
+  </div>
 
   <section class="card backup">
     <div>
@@ -306,9 +374,14 @@ form{display:grid;gap:14px}
     <div class="acts">
       <button class="btn sm ghost" id="exportBtn" type="button">Shkarko backup</button>
       <label class="btn sm ghost file-btn">Ngarko backup<input id="importFile" type="file" accept=".json,application/json"></label>
+      <button class="btn sm ghost" id="faceBtn" type="button" hidden>Aktivizo Face ID</button>
       <button class="btn sm ghost" id="newCodeBtn" type="button">Kod i ri rikthimi</button>
       <button class="btn sm danger" id="wipeBtn" type="button">Fshi të gjitha</button>
     </div>
+    <form id="faceForm" class="nc" hidden>
+      <label class="field"><span class="lbl">Shkruaj password-in për ta aktivizuar Face ID</span><input id="fcPass" type="password" autocomplete="current-password"></label>
+      <button class="btn sm" type="submit">Aktivizo</button>
+    </form>
     <form id="newCodeForm" class="nc" hidden>
       <label class="field"><span class="lbl">Shkruaj password-in për kod të ri</span><input id="ncPass" type="password" autocomplete="current-password"></label>
       <button class="btn sm" type="submit">Krijo kodin</button>
@@ -405,7 +478,7 @@ async function keyGet(uid){try{const d=await idb();return await new Promise(r=>{
 async function keySet(uid,k){try{const d=await idb();d.transaction("k","readwrite").objectStore("k").put(k,uid)}catch(_){}}
 async function keyDel(uid){try{const d=await idb();d.transaction("k","readwrite").objectStore("k").delete(uid)}catch(_){}}
 
-let user=null, entries=[], limits={}, unsubs=[], pendingPass=null, snapVer=0, unlocking=false;
+let user=null, entries=[], limits={}, accounts=[], unsubs=[], pendingPass=null, snapVer=0, accVer=0, unlocking=false;
 const now=new Date();
 let view={y:now.getFullYear(),m:now.getMonth()};
 let filter="all", editingLimits=false;
@@ -414,6 +487,73 @@ const cat=(kind,id)=>CATS[kind].find(c=>c.id===id)||{id,name:id,color:"--c-other
 const say=t=>{$("status").textContent=t};
 const entryRef=id=>doc(db,"users",user.uid,"entries",id);
 const userRef=()=>doc(db,"users",user.uid);
+const accRef=id=>doc(db,"users",user.uid,"accounts",id);
+
+/* shumat: pranon 12,50 · 12.50 · 1.234,56 · 1,234.56 · 1.500 (= 1500) */
+function parseAmount(v){
+  if(typeof v!=="string")return NaN;
+  let s=v.trim().replace(/[€\s\u00a0]/g,""); let neg=false;
+  if(/^[-−]/.test(s)){neg=true;s=s.slice(1)}
+  if(!s||!/^[\d.,]+$/.test(s))return NaN;
+  const lc=s.lastIndexOf(","), ld=s.lastIndexOf(".");
+  if(lc>-1&&ld>-1){const dec=lc>ld?",":".", th=dec===","?".":","; s=s.split(th).join("").replace(dec,".")}
+  else if(lc>-1){const p=s.split(","); s=p.length>2?p.join(""):p[0]+"."+p[1]}
+  else if(ld>-1){const p=s.split("."); if(p.length>2||(p[1].length===3&&p[0]!=="0"&&p[0]!=="")) s=p.join("")}
+  if(/^\./.test(s))s="0"+s;
+  const n=Number(s); return isFinite(n)?Math.round((neg?-n:n)*100)/100:NaN;
+}
+const toInput=n=>(Math.round(n*100)/100).toFixed(2).replace(".",",");
+function hintFor(inputId,hintId){
+  const i=$(inputId),h=$(hintId); if(!i||!h)return;
+  i.addEventListener("input",()=>{const v=parseAmount(i.value); h.textContent=!i.value.trim()?"":isNaN(v)?"Shkruaj vetëm numra, p.sh. 12,50":"= "+money(v)});
+}
+
+/* ====== FACE ID (WebAuthn) ======
+   Me PRF: çelësi i të dhënave mbyllet me Face ID dhe s'ruhet i hapur në pajisje.
+   Pa PRF: Face ID funksionon si kyç para se të shfaqen të dhënat. */
+const FKEY=uid=>"buxheti-face-"+uid;
+const faceCfg=uid=>{try{return JSON.parse(localStorage.getItem(FKEY(uid))||"null")}catch(_){return null}};
+const faceSave=(uid,c)=>{try{c?localStorage.setItem(FKEY(uid),JSON.stringify(c)):localStorage.removeItem(FKEY(uid))}catch(_){}};
+let faceOK=false;
+(async()=>{try{faceOK=!!(window.PublicKeyCredential&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())}catch(_){faceOK=false} updateFaceBtn()})();
+function updateFaceBtn(){ const b=$("faceBtn"); if(!b)return; b.hidden=!(faceOK&&user); if(user) b.textContent=faceCfg(user.uid)?"Çaktivizo Face ID":"Aktivizo Face ID" }
+async function persistKey(uid,k){ const c=faceCfg(uid); if(c&&c.mode==="prf") return; await keySet(uid,k) }
+const prfKey=bytes=>crypto.subtle.importKey("raw",bytes,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+async function faceAssert(c){
+  const o={publicKey:{challenge:crypto.getRandomValues(new Uint8Array(32)),allowCredentials:[{type:"public-key",id:unb64(c.id)}],userVerification:"required",timeout:60000}};
+  if(c.mode==="prf") o.publicKey.extensions={prf:{eval:{first:unb64(c.salt)}}};
+  const a=await navigator.credentials.get(o);
+  const r=a&&a.getClientExtensionResults?a.getClientExtensionResults():{};
+  return r.prf&&r.prf.results&&r.prf.results.first?new Uint8Array(r.prf.results.first):null;
+}
+async function enableFace(pass){
+  const d=(await getDoc(userRef())).data()||{};
+  const raw=await unwrap(d.wp,pass);                       // gabon nëse password-i s'është i saktë
+  const salt=crypto.getRandomValues(new Uint8Array(32));
+  const cred=await navigator.credentials.create({publicKey:{
+    challenge:crypto.getRandomValues(new Uint8Array(32)), rp:{name:"Buxheti Im"},
+    user:{id:TE.encode(user.uid),name:user.email,displayName:user.displayName||user.email},
+    pubKeyCredParams:[{type:"public-key",alg:-7},{type:"public-key",alg:-257}],
+    authenticatorSelection:{authenticatorAttachment:"platform",userVerification:"required",residentKey:"preferred"},
+    timeout:60000, extensions:{prf:{eval:{first:salt}}}}});
+  const ext=cred.getClientExtensionResults?cred.getClientExtensionResults():{};
+  let c={id:b64(cred.rawId),salt:b64(salt),mode:"gate"};
+  if(ext.prf&&ext.prf.enabled!==false){
+    let out=ext.prf.results&&ext.prf.results.first?new Uint8Array(ext.prf.results.first):null;
+    if(!out){try{out=await faceAssert({...c,mode:"prf"})}catch(_){out=null}}
+    if(out){c={...c,mode:"prf",wrap:await seal(b64(raw),await prfKey(out))}}
+  }
+  faceSave(user.uid,c);
+  if(c.mode==="prf") await keyDel(user.uid); else await keySet(user.uid,KEY);
+  return c.mode;
+}
+async function faceUnlock(){
+  const c=faceCfg(user.uid); if(!c)return false;
+  const out=await faceAssert(c);
+  if(c.mode==="prf"){ if(!out)return false; const raw=unb64(await unseal(c.wrap,await prfKey(out))); KEY=await importDek(raw) }
+  else { KEY=await keyGet(user.uid); if(!KEY)return false }
+  return true;
+}
 
 /* ---------- screens ---------- */
 function show(which){
@@ -422,6 +562,7 @@ function show(which){
   $("app").hidden=which!=="app";
   const unlock=which==="unlock";
   $("modeTabs").hidden=unlock; $("unlockHead").hidden=!unlock; $("unlockOut").hidden=!unlock;
+  $("faceRow").hidden=!(unlock&&user&&faceCfg(user.uid));
   $("aEmail").readOnly=unlock;
   if(unlock){$("nameField").hidden=true;$("forgotRow").hidden=true;$("aBtn").textContent="Hap të dhënat";$("aEmail").value=user.email;$("aPass").value="";$("aPass").focus()}
   else if(which==="auth"){$("resetRow").hidden=true;syncMode()}
@@ -479,8 +620,14 @@ async function startApp(){
   const name=user.displayName||user.email.split("@")[0];
   $("avatar").textContent=name.charAt(0).toUpperCase();
   $("avatar").title=name+" · "+user.email;
-  show("app"); render();
+  show("app"); render(); renderBalance(); updateFaceBtn();
   if(pendingCode) showCode(pendingCode);
+  unsubs.push(onSnapshot(collection(db,"users",user.uid,"accounts"),async snap=>{
+    const ver=++accVer, out=[];
+    for(const d of snap.docs){const raw=d.data(); if(isSealed(raw)){try{out.push({id:d.id,...await unseal(raw)})}catch(_){}}}
+    if(ver!==accVer)return;
+    accounts=out.filter(a=>typeof a.balance==="number"&&a.name); renderBalance();
+  },()=>{}));
   unsubs.push(onSnapshot(collection(db,"users",user.uid,"entries"),async snap=>{
     const ver=++snapVer, out=[], legacy=[];
     for(const d of snap.docs){
@@ -502,12 +649,13 @@ async function startApp(){
 
 onAuthStateChanged(auth,async u=>{
   if(unlocking&&u&&user&&u.uid===user.uid)return;
-  unsubs.forEach(f=>f()); unsubs=[]; snapVer++;
-  user=u; entries=[]; limits={}; KEY=null;
+  unsubs.forEach(f=>f()); unsubs=[]; snapVer++; accVer++;
+  user=u; entries=[]; limits={}; accounts=[]; KEY=null;
   if(!u){show("auth");return}
   show("loading");
   try{
-    if(pendingPass){ const p=pendingPass; pendingPass=null; KEY=await unlockWith(p); if(KEY) await keySet(u.uid,KEY) }
+    if(pendingPass){ const p=pendingPass; pendingPass=null; KEY=await unlockWith(p); if(KEY) await persistKey(u.uid,KEY) }
+    else if(faceCfg(u.uid)){ KEY=null }                       // Face ID aktiv: kërko Face ID para se të hapet
     else { KEY=await keyGet(u.uid); if(KEY){ const d=(await getDoc(userRef())).data(); if(!d||d.v!==2) KEY=null } }  // versioni i vjetër: kërko password-in një herë për kodin e rikthimit
   }catch(_){KEY=null}
   if(KEY) startApp();
@@ -546,7 +694,7 @@ $("authForm").addEventListener("submit",async ev=>{
       unlocking=true;
       try{ await signInWithEmailAndPassword(auth,user.email,pass) } finally { setTimeout(()=>{unlocking=false},1500) }
       const k=await unlockWith(pass);
-      if(k){KEY=k;await keySet(user.uid,k);startApp()}
+      if(k){KEY=k;await persistKey(user.uid,k);startApp()}
       else{err.textContent="Password-i yt u ndryshua. Për t'i hapur të dhënat, shkruaj kodin e rikthimit që të dha aplikacioni kur u regjistrove.";$("resetRow").hidden=false;$("rCode").focus()}
       return;
     }
@@ -581,6 +729,9 @@ $("startOver").onclick=async()=>{
     const snap=await getDocs(collection(db,"users",user.uid,"entries"));
     await commitInChunks(snap.docs.map(d=>b=>b.delete(d.ref)));
     await deleteDoc(userRef());
+    const accSnap=await getDocs(collection(db,"users",user.uid,"accounts"));
+    await commitInChunks(accSnap.docs.map(d=>b=>b.delete(d.ref)));
+    faceSave(user.uid,null);
     const k=await unlockWith(pass); KEY=k; await keySet(user.uid,k); $("resetRow").hidden=true; startApp();
   }catch(e){err.textContent=AUTH_ERR[e.code]||"S'u krye ("+(e.code||e.message)+")."}
 };
@@ -593,7 +744,7 @@ $("recoverBtn").onclick=async()=>{
     unlocking=true;
     try{ await signInWithEmailAndPassword(auth,user.email,pass) } finally { setTimeout(()=>{unlocking=false},1500) }
     const k=await recoverWith(code,pass);
-    if(k){KEY=k;await keySet(user.uid,k);$("resetRow").hidden=true;$("rCode").value="";startApp()}
+    if(k){KEY=k;await persistKey(user.uid,k);$("resetRow").hidden=true;$("rCode").value="";startApp()}
     else err.textContent="Kodi s'është i saktë. Kontrolloje edhe një herë.";
   }catch(e){err.textContent=AUTH_ERR[e.code]||"S'u krye ("+(e.code||e.message)+")."}
   finally{$("recoverBtn").disabled=false}
@@ -611,6 +762,21 @@ $("newCodeForm").addEventListener("submit",async ev=>{
   catch(_){say("Password-i s'është i saktë.")}
 });
 $("logout").onclick=async()=>{ if(user) await keyDel(user.uid); signOut(auth) };
+$("faceUnlock").onclick=async()=>{
+  const err=$("aErr"); err.classList.remove("ok"); err.textContent="";
+  try{ if(await faceUnlock()) startApp(); else err.textContent="Face ID s'i hapi të dhënat. Shkruaj password-in." }
+  catch(_){ err.textContent="Face ID u anulua. Provo prapë ose shkruaj password-in." }
+};
+$("faceBtn").onclick=async()=>{
+  if(faceCfg(user.uid)){ faceSave(user.uid,null); await keySet(user.uid,KEY); updateFaceBtn(); say("Face ID u çaktivizua në këtë pajisje."); return }
+  $("faceForm").hidden=!$("faceForm").hidden; if(!$("faceForm").hidden) $("fcPass").focus();
+};
+$("faceForm").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  try{ const m=await enableFace($("fcPass").value); $("fcPass").value=""; $("faceForm").hidden=true; updateFaceBtn();
+    say(m==="prf"?"Face ID u aktivizua. Herën tjetër hape me Face ID.":"Face ID u aktivizua si kyç për këtë pajisje."); }
+  catch(e){ say(e&&e.name==="OperationError"?"Password-i s'është i saktë.":e&&e.name==="NotAllowedError"?"Face ID u anulua.":"Password-i s'është i saktë, ose pajisja s'e mbështet Face ID.") }
+});
 
 /* ---------- form ---------- */
 const kind=()=>document.querySelector('input[name=kind]:checked').value;
@@ -671,10 +837,10 @@ function render(){
     d.querySelector(".n span:last-child").textContent=c.name;
     if(editingLimits){
       const w=document.createElement("label"); w.className="limit"; w.textContent="Limiti mujor €";
-      const inp=document.createElement("input"); inp.type="number"; inp.min="0"; inp.step="1"; inp.id="lim-"+c.id;
-      inp.placeholder="pa limit"; inp.value=lim||"";
+      const inp=document.createElement("input"); inp.type="text"; inp.inputMode="decimal"; inp.autocomplete="off"; inp.id="lim-"+c.id;
+      inp.placeholder="pa limit"; inp.value=lim?toInput(lim):"";
       inp.addEventListener("change",async()=>{
-        const v=parseFloat(inp.value), next={...limits};
+        const v=parseAmount(inp.value), next={...limits};
         if(v>0)next[c.id]=v; else delete next[c.id];
         limits=next; render(); const n=$("lim-"+c.id); if(n)n.focus();
         try{await setDoc(userRef(),{limits:await seal(next)},{merge:true})}catch(_){say("Limiti s'u ruajt. Provo përsëri.")}
@@ -713,15 +879,15 @@ function render(){
 /* ---------- events ---------- */
 $("form").addEventListener("submit",async ev=>{
   ev.preventDefault();
-  const amount=Math.round(parseFloat($("amount").value)*100)/100;
+  const amount=parseAmount($("amount").value);
   const date=$("date").value;
-  if(!(amount>0)){say("Shkruaj një shumë më të madhe se 0.");$("amount").focus();return}
+  if(!(amount>0)){say(isNaN(amount)?"Shuma s'është e qartë. Shkruaj p.sh. 12,50":"Shkruaj një shumë më të madhe se 0.");$("amount").focus();return}
   if(!date){say("Zgjidh datën.");$("date").focus();return}
   const c=document.querySelector('input[name=cat]:checked');
   const ref=doc(collection(db,"users",user.uid,"entries"));
   const body={kind:kind(),cat:c?c.value:"other",amount,date,note:$("note").value.trim(),created:Date.now()};
   const [y,m]=date.split("-").map(Number); view={y,m:m-1};
-  $("amount").value=""; $("note").value=""; $("amount").focus();
+  $("amount").value=""; $("note").value=""; $("amtHint").textContent=""; $("amount").focus();
   try{
     await setDoc(ref,await seal(body));
     say("U shtua "+money(amount)+".");
@@ -744,7 +910,7 @@ $("limitsBtn").onclick=()=>{
 
 /* ---------- backup ---------- */
 $("exportBtn").onclick=()=>{
-  const blob=new Blob([JSON.stringify({app:"buxheti",version:3,exported:new Date().toISOString(),entries,limits},null,2)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({app:"buxheti",version:4,exported:new Date().toISOString(),entries,limits,accounts},null,2)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="buxheti-backup-"+iso(new Date())+".json";
   document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   say("Backup-i u shkarkua. Ky file s'është i enkriptuar, ruaje me kujdes.");
@@ -761,6 +927,9 @@ $("importFile").addEventListener("change",ev=>{
       const sealed=[]; for(const e of inc){const {id,...body}=e; sealed.push([id,await seal(body)])}
       await commitInChunks(sealed.map(([id,s])=>b=>b.set(entryRef(id),s)));
       if(d.limits&&typeof d.limits==="object") await setDoc(userRef(),{limits:await seal({...limits,...d.limits})},{merge:true});
+      const accs=Array.isArray(d.accounts)?d.accounts.filter(a=>a&&typeof a.id==="string"&&typeof a.balance==="number"&&a.name):[];
+      const sa=[]; for(const a of accs){const {id,...body}=a; sa.push([id,await seal(body)])}
+      await commitInChunks(sa.map(([id,x])=>b=>b.set(accRef(id),x)));
       say("U ngarkuan "+inc.length+" hyrje nga backup-i.");
     }catch(_){say("Ky file nuk është backup i Buxhetit, ose s'u ruajt.")}
     ev.target.value="";
@@ -772,9 +941,90 @@ $("wipeBtn").onclick=async()=>{
   const b=$("wipeBtn");
   if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Kliko sërish për t'i fshirë";clearTimeout(armTimer);armTimer=setTimeout(()=>{b.classList.remove("armed");b.textContent="Fshi të gjitha"},4000);return}
   clearTimeout(armTimer); b.classList.remove("armed"); b.textContent="Fshi të gjitha";
-  try{await commitInChunks(entries.map(e=>bt=>bt.delete(entryRef(e.id))));await setDoc(userRef(),{limits:await seal({})},{merge:true});say("Të gjitha hyrjet u fshinë.")}
+  try{await commitInChunks([...entries.map(e=>bt=>bt.delete(entryRef(e.id))),...accounts.map(a=>bt=>bt.delete(accRef(a.id)))]);await setDoc(userRef(),{limits:await seal({})},{merge:true});say("Të gjitha hyrjet dhe llogaritë u fshinë.")}
   catch(_){say("S'u fshinë. Provo përsëri.")}
 };
+
+/* ---------- tabs ---------- */
+function setTab(t){
+  const bal=t==="balance";
+  $("tabBudget").hidden=bal; $("tabBalance").hidden=!bal;
+  $("tabBtnBudget").setAttribute("aria-selected",String(!bal)); $("tabBtnBalance").setAttribute("aria-selected",String(bal));
+  document.querySelector(".month").hidden=bal;
+  try{localStorage.setItem("buxheti-tab",t)}catch(_){}
+}
+$("tabBtnBudget").onclick=()=>setTab("budget");
+$("tabBtnBalance").onclick=()=>setTab("balance");
+try{ if(localStorage.getItem("buxheti-tab")==="balance") setTab("balance") }catch(_){}
+
+/* ---------- balanca ---------- */
+const ACC_TYPES=[
+  {id:"bank",name:"Bankë",color:"--c-bills"},
+  {id:"card",name:"Kartelë",color:"--c-rent"},
+  {id:"cash",name:"Cash",color:"--c-groceries"},
+  {id:"savings",name:"Kursime",color:"--c-transport"},
+  {id:"other",name:"Tjetër",color:"--c-other"}
+];
+const accType=id=>ACC_TYPES.find(t=>t.id===id)||ACC_TYPES[4];
+const shortDate=ts=>{const d=new Date(ts);return d.getDate()+" "+MONTHS[d.getMonth()].slice(0,3)};
+let editingAcc=null;
+(function(){const box=$("accTypes");ACC_TYPES.forEach((t,i)=>{const l=document.createElement("label");l.className="chip";
+  l.innerHTML=`<input type="radio" name="accType" value="${t.id}"${i===0?" checked":""}><span class="sw" style="background:var(${t.color})"></span>`;l.append(t.name);box.append(l)})})();
+
+function renderBalance(){
+  if(!user||!KEY)return;
+  const total=accounts.reduce((a,x)=>a+x.balance,0);
+  $("balTotal").textContent=money(total); $("balTotal").classList.toggle("neg",total<0);
+  const last=accounts.reduce((m,x)=>Math.max(m,x.updated||0),0);
+  $("balNote").textContent=accounts.length?("Në "+accounts.length+(accounts.length===1?" llogari":" llogari")+" · përditësuar "+shortDate(last)):"Shto llogarinë e parë: kartelën, cash-in ose bankën.";
+  const pos=accounts.filter(a=>a.balance>0), posSum=pos.reduce((a,x)=>a+x.balance,0);
+  const byType=ACC_TYPES.map(t=>({t,v:accounts.filter(a=>a.type===t.id).reduce((s,a)=>s+a.balance,0)})).filter(x=>x.v!==0);
+  $("balStack").innerHTML=posSum>0?ACC_TYPES.map(t=>{const v=pos.filter(a=>a.type===t.id).reduce((s,a)=>s+a.balance,0);return v>0?`<i style="width:${(v/posSum*100).toFixed(2)}%;background:var(${t.color})"></i>`:""}).join(""):"";
+  $("balLegend").innerHTML=""; byType.forEach(({t,v})=>{const s=document.createElement("span");s.innerHTML=`<span class="sw" style="background:var(${t.color})"></span>`;s.append(t.name+" ");const b=document.createElement("b");b.textContent=money(v);s.append(b);$("balLegend").append(s)});
+
+  const list=$("accList"); list.innerHTML="";
+  if(!accounts.length){list.innerHTML=`<p class="empty">Ende asnjë llogari. Shtoje të parën me formularin.</p>`;return}
+  const order=ACC_TYPES.map(t=>t.id);
+  [...accounts].sort((a,b)=>order.indexOf(a.type)-order.indexOf(b.type)||a.name.localeCompare(b.name)).forEach(a=>{
+    const t=accType(a.type); const r=document.createElement("div"); r.className="acc";
+    r.innerHTML=`<div class="ico" style="background:var(${t.color})"></div><div class="t"><b></b><small></small></div><div class="a${a.balance<0?" neg":""}"></div><div class="acc-act"></div>`;
+    r.querySelector(".ico").textContent=a.name.charAt(0).toUpperCase();
+    r.querySelector("b").textContent=a.name;
+    r.querySelector("small").textContent=t.name+(a.updated?" · "+shortDate(a.updated):"");
+    const act=r.querySelector(".acc-act");
+    if(editingAcc===a.id){
+      const f=document.createElement("form"); f.className="acc-edit";
+      const inp=document.createElement("input"); inp.type="text"; inp.inputMode="decimal"; inp.autocomplete="off"; inp.id="accEdit-"+a.id; inp.value=toInput(a.balance); inp.setAttribute("aria-label","Balanca e re për "+a.name);
+      const ok=document.createElement("button"); ok.className="mini go"; ok.type="submit"; ok.textContent="Ruaj";
+      const no=document.createElement("button"); no.className="mini"; no.type="button"; no.textContent="Anulo"; no.onclick=()=>{editingAcc=null;renderBalance()};
+      f.append(inp,ok,no);
+      f.onsubmit=async ev=>{ev.preventDefault(); const v=parseAmount(inp.value);
+        if(isNaN(v)){$("accStatus").textContent="Shuma s'është e qartë. Shkruaj p.sh. 1.250,40";inp.focus();return}
+        editingAcc=null; const {id,...body}=a;
+        try{await setDoc(accRef(id),await seal({...body,balance:v,updated:Date.now()}));$("accStatus").textContent=a.name+": "+money(v)}catch(_){$("accStatus").textContent="S'u ruajt. Provo përsëri."}};
+      r.querySelector(".a").replaceWith(f); act.remove();
+      list.append(r); setTimeout(()=>{inp.focus();inp.select()},0); return;
+    }
+    r.querySelector(".a").textContent=money(a.balance);
+    const ed=document.createElement("button"); ed.className="mini"; ed.type="button"; ed.textContent="Ndrysho"; ed.setAttribute("aria-label","Ndrysho balancën e "+a.name);
+    ed.onclick=()=>{editingAcc=a.id;renderBalance()};
+    const del=document.createElement("button"); del.className="del"; del.type="button"; del.textContent="×"; del.setAttribute("aria-label","Fshi "+a.name);
+    let t0; del.onclick=async()=>{ if(!del.classList.contains("armed")){del.classList.add("armed");del.textContent="Fshi?";t0=setTimeout(()=>{del.classList.remove("armed");del.textContent="×"},3000);return}
+      clearTimeout(t0); try{await deleteDoc(accRef(a.id));$("accStatus").textContent=a.name+" u fshi."}catch(_){$("accStatus").textContent="S'u fshi. Provo përsëri."} };
+    act.append(ed,del); list.append(r);
+  });
+}
+$("accForm").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const name=$("accName").value.trim(), bal=parseAmount($("accBal").value), type=document.querySelector('input[name=accType]:checked').value;
+  if(!name){$("accStatus").textContent="Shkruaj emrin e llogarisë.";$("accName").focus();return}
+  if(isNaN(bal)){$("accStatus").textContent="Shkruaj balancën, p.sh. 1.250,40";$("accBal").focus();return}
+  const ref=doc(collection(db,"users",user.uid,"accounts"));
+  $("accName").value=""; $("accBal").value=""; $("accHint").textContent="";
+  try{await setDoc(ref,await seal({name,type,balance:bal,updated:Date.now()}));$("accStatus").textContent="U shtua: "+name+", "+money(bal)}
+  catch(_){$("accStatus").textContent="S'u ruajt. Kontrollo internetin dhe provo përsëri."}
+});
+hintFor("amount","amtHint"); hintFor("accBal","accHint");
 
 $("date").value=iso(now);
 fillChips(); syncMode();
