@@ -178,6 +178,18 @@ form{display:grid;gap:14px}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:.85rem}
 .top-r{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .unlock-h{font-family:var(--display);font-weight:700;font-size:1.15rem;margin:0 0 6px;text-align:center}
+.recover{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+#rCode{font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.nc{display:flex;flex-wrap:wrap;align-items:end;gap:10px;width:100%}
+.nc .field{flex:1;min-width:200px}
+.modal{position:fixed;inset:0;z-index:20;background:rgba(10,14,30,.6);display:grid;place-items:center;padding:20px max(16px,env(safe-area-inset-right)) 20px max(16px,env(safe-area-inset-left))}
+.modal-card{width:100%;max-width:420px;background:var(--surface);border-radius:22px;padding:24px;display:grid;gap:14px}
+.modal-card h2{font-family:var(--display);font-weight:700;font-size:1.15rem;margin:0}
+.modal-card p{margin:0;color:var(--muted);font-size:.9rem}
+.code{font-family:var(--mono);font-weight:700;font-size:1.3rem;letter-spacing:.08em;text-align:center;background:var(--surface-2);border:2px dashed var(--accent);border-radius:14px;padding:16px 10px;user-select:all;overflow-wrap:anywhere}
+.ack{display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+.ack input{width:18px;height:18px;accent-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 .lock-note{margin:0;font-size:.8rem;color:var(--muted);line-height:1.45;background:var(--surface-2);border-radius:12px;padding:10px 12px}
 </style>
 </head>
@@ -199,9 +211,13 @@ form{display:grid;gap:14px}
       <p class="err" id="aErr" aria-live="polite"></p>
       <button class="btn" id="aBtn" type="submit">Hyr</button>
       <p class="center" id="forgotRow"><button class="linkbtn" id="forgot" type="button">E harrove password-in?</button></p>
-      <p class="center" id="resetRow" hidden><button class="btn sm danger" id="startOver" type="button">Fillo nga e para</button></p>
+      <div id="resetRow" class="recover" hidden>
+        <label class="field"><span class="lbl">Kodi i rikthimit</span><input id="rCode" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
+        <button class="btn" id="recoverBtn" type="button">Hap me kodin</button>
+        <p class="center">S'e ke kodin? <button class="linkbtn" id="startOver" type="button">Fillo nga e para</button></p>
+      </div>
     </form>
-    <p class="lock-note"><span aria-hidden="true">🔒</span> Të dhënat enkriptohen në pajisjen tënde me password-in tënd. Askush tjetër s'mund t'i lexojë, as administratorja e aplikacionit.</p>
+    <p class="lock-note"><span aria-hidden="true">🔒</span> Të dhënat enkriptohen në pajisjen tënde me password-in tënd. Askush tjetër s'mund t'i lexojë, as administratorja e aplikacionit. Nëse e harron password-in, i hap me kodin e rikthimit.</p>
     <p class="center" id="unlockOut" hidden><button class="linkbtn" id="unlockLogout" type="button">Dil nga llogaria</button></p>
   </div>
 </main>
@@ -290,10 +306,26 @@ form{display:grid;gap:14px}
     <div class="acts">
       <button class="btn sm ghost" id="exportBtn" type="button">Shkarko backup</button>
       <label class="btn sm ghost file-btn">Ngarko backup<input id="importFile" type="file" accept=".json,application/json"></label>
+      <button class="btn sm ghost" id="newCodeBtn" type="button">Kod i ri rikthimi</button>
       <button class="btn sm danger" id="wipeBtn" type="button">Fshi të gjitha</button>
     </div>
+    <form id="newCodeForm" class="nc" hidden>
+      <label class="field"><span class="lbl">Shkruaj password-in për kod të ri</span><input id="ncPass" type="password" autocomplete="current-password"></label>
+      <button class="btn sm" type="submit">Krijo kodin</button>
+    </form>
   </section>
 
+</div>
+
+<div class="modal" id="codeModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="codeH">
+    <h2 id="codeH">Kodi yt i rikthimit</h2>
+    <p>Nëse e harron password-in, vetëm me këtë kod i hap prapë të dhënat. Ruaje diku të sigurt: bëji foto, shënoje në telefon ose në letër. Askush tjetër s'e ka, as administratorja.</p>
+    <div class="code" id="codeText"></div>
+    <button class="btn sm ghost" id="copyCode" type="button">Kopjo kodin</button>
+    <label class="ack"><input type="checkbox" id="codeAck"> E ruajta kodin</label>
+    <button class="btn" id="codeDone" type="button" disabled>Vazhdo</button>
+  </div>
 </div>
 
 <script type="module">
@@ -395,19 +427,51 @@ function show(which){
   else if(which==="auth"){$("resetRow").hidden=true;syncMode()}
 }
 
-/* gjen ose krijon çelësin për këtë përdorues */
-async function unlockWith(pass){
-  const snap=await getDoc(userRef()); const d=snap.data()||{};
-  if(!d.salt){                                   // përdorues i ri, ose i vjetër pa enkriptim
-    const salt=b64(crypto.getRandomValues(new Uint8Array(16)));
-    const k=await deriveKey(pass,salt);
-    const plainLimits=d.limits&&!isSealed(d.limits)?d.limits:{};
-    await setDoc(userRef(),{salt,check:await seal("ok",k),limits:await seal(plainLimits,k)});
-    return k;
+/* ====== ÇELËSAT ======
+   Të dhënat enkriptohen me një çelës të rastësishëm (DEK).
+   Ky çelës ruhet në Firebase i mbyllur dy herë: me password-in
+   dhe me kodin e rikthimit. Pa njërin prej tyre s'hapet. */
+const RC_ALPH="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function newCode(){const r=crypto.getRandomValues(new Uint8Array(16));let s="";r.forEach((b,i)=>{s+=RC_ALPH[b%32];if(i%4===3&&i<15)s+="-"});return s}
+const normCode=c=>c.toUpperCase().replace(/[^A-Z0-9]/g,"").replace(/(.{4})(?=.)/g,"$1-");
+async function wrap(raw,secret){const salt=b64(crypto.getRandomValues(new Uint8Array(16)));const k=await deriveKey(secret,salt);return {salt,...await seal(b64(raw),k)}}
+async function unwrap(w,secret){const k=await deriveKey(secret,w.salt);return unb64(await unseal(w,k))}
+const importDek=raw=>crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+let pendingCode=null;
+
+async function setupV2(pass,oldKey,d){
+  const raw=crypto.getRandomValues(new Uint8Array(32)); const dek=await importDek(raw);
+  const code=newCode();
+  if(oldKey){                                    // ri-enkripto hyrjet e versionit të mëparshëm
+    const snap=await getDocs(collection(db,"users",user.uid,"entries")); const ops=[];
+    for(const x of snap.docs){const v=x.data(); if(isSealed(v)){try{const body=await unseal(v,oldKey);const s=await seal(body,dek);ops.push(b=>b.set(x.ref,s))}catch(_){}}}
+    await commitInChunks(ops);
   }
-  const k=await deriveKey(pass,d.salt);
-  try{ if(await unseal(d.check,k)==="ok") return k }catch(_){}
-  return null;                                   // password-i s'e hap
+  let lim={}; if(d.limits){ if(isSealed(d.limits)){ if(oldKey){try{lim=await unseal(d.limits,oldKey)}catch(_){}} } else lim=d.limits }
+  await setDoc(userRef(),{v:2,wp:await wrap(raw,pass),wr:await wrap(raw,code),limits:await seal(lim,dek)});
+  pendingCode=code; return dek;
+}
+async function unlockWith(pass){
+  const d=(await getDoc(userRef())).data()||{};
+  if(d.v===2){ try{return await importDek(await unwrap(d.wp,pass))}catch(_){return null} }
+  if(d.salt){ const k=await deriveKey(pass,d.salt); try{ if(await unseal(d.check,k)==="ok") return await setupV2(pass,k,d) }catch(_){} return null }
+  return await setupV2(pass,null,d);
+}
+async function recoverWith(code,newPass){
+  const d=(await getDoc(userRef())).data()||{};
+  if(d.v!==2||!d.wr) return null;
+  let raw; try{raw=await unwrap(d.wr,normCode(code))}catch(_){return null}
+  const c=newCode();
+  await setDoc(userRef(),{wp:await wrap(raw,newPass),wr:await wrap(raw,c)},{merge:true});
+  pendingCode=c; return importDek(raw);
+}
+async function newRecoveryCode(pass){
+  const d=(await getDoc(userRef())).data()||{};
+  const raw=await unwrap(d.wp,pass); const c=newCode();
+  await setDoc(userRef(),{wr:await wrap(raw,c)},{merge:true}); return c;
+}
+function showCode(c){
+  $("codeText").textContent=c; $("codeAck").checked=false; $("codeDone").disabled=true; $("codeModal").hidden=false; pendingCode=null;
 }
 
 async function startApp(){
@@ -416,6 +480,7 @@ async function startApp(){
   $("avatar").textContent=name.charAt(0).toUpperCase();
   $("avatar").title=name+" · "+user.email;
   show("app"); render();
+  if(pendingCode) showCode(pendingCode);
   unsubs.push(onSnapshot(collection(db,"users",user.uid,"entries"),async snap=>{
     const ver=++snapVer, out=[], legacy=[];
     for(const d of snap.docs){
@@ -443,7 +508,7 @@ onAuthStateChanged(auth,async u=>{
   show("loading");
   try{
     if(pendingPass){ const p=pendingPass; pendingPass=null; KEY=await unlockWith(p); if(KEY) await keySet(u.uid,KEY) }
-    else KEY=await keyGet(u.uid);
+    else { KEY=await keyGet(u.uid); if(KEY){ const d=(await getDoc(userRef())).data(); if(!d||d.v!==2) KEY=null } }  // versioni i vjetër: kërko password-in një herë për kodin e rikthimit
   }catch(_){KEY=null}
   if(KEY) startApp();
   else { show("unlock"); $("aErr").classList.remove("ok"); $("aErr").textContent="" }
@@ -482,7 +547,7 @@ $("authForm").addEventListener("submit",async ev=>{
       try{ await signInWithEmailAndPassword(auth,user.email,pass) } finally { setTimeout(()=>{unlocking=false},1500) }
       const k=await unlockWith(pass);
       if(k){KEY=k;await keySet(user.uid,k);startApp()}
-      else{err.textContent="Ky është password-i yt i ri, por të dhënat u enkriptuan me password-in e vjetër. Shkruaj password-in e vjetër, ose fillo nga e para.";$("resetRow").hidden=false}
+      else{err.textContent="Password-i yt u ndryshua. Për t'i hapur të dhënat, shkruaj kodin e rikthimit që të dha aplikacioni kur u regjistrove.";$("resetRow").hidden=false;$("rCode").focus()}
       return;
     }
     if(mode()==="signup"){
@@ -502,7 +567,7 @@ $("authForm").addEventListener("submit",async ev=>{
 $("forgot").onclick=async()=>{
   const email=$("aEmail").value.trim(), err=$("aErr");
   if(!email){err.classList.remove("ok");err.textContent="Shkruaj email-in lart, pastaj kliko sërish.";$("aEmail").focus();return}
-  try{await sendPasswordResetEmail(auth,email);err.classList.add("ok");err.textContent="Të dërguam një email. Kujdes: me password të ri, të dhënat e vjetra s'mund të hapen, sepse janë të enkriptuara me të vjetrin."}
+  try{await sendPasswordResetEmail(auth,email);err.classList.add("ok");err.textContent="Të dërguam një email. Pas ndryshimit të password-it, të duhet kodi i rikthimit për t'i hapur të dhënat."}
   catch(e){err.classList.remove("ok");err.textContent=AUTH_ERR[e.code]||"S'u dërgua ("+e.code+")."}
 };
 let resetArmed=false;
@@ -520,6 +585,31 @@ $("startOver").onclick=async()=>{
   }catch(e){err.textContent=AUTH_ERR[e.code]||"S'u krye ("+(e.code||e.message)+")."}
 };
 $("unlockLogout").onclick=()=>signOut(auth);
+$("recoverBtn").onclick=async()=>{
+  const code=$("rCode").value, pass=$("aPass").value, err=$("aErr");
+  if(normCode(code).length!==19){err.textContent="Kodi ka 16 shkronja e numra, p.sh. K7QM-2HXP-9DWT-RB4N.";return}
+  $("recoverBtn").disabled=true;
+  try{
+    unlocking=true;
+    try{ await signInWithEmailAndPassword(auth,user.email,pass) } finally { setTimeout(()=>{unlocking=false},1500) }
+    const k=await recoverWith(code,pass);
+    if(k){KEY=k;await keySet(user.uid,k);$("resetRow").hidden=true;$("rCode").value="";startApp()}
+    else err.textContent="Kodi s'është i saktë. Kontrolloje edhe një herë.";
+  }catch(e){err.textContent=AUTH_ERR[e.code]||"S'u krye ("+(e.code||e.message)+")."}
+  finally{$("recoverBtn").disabled=false}
+};
+$("codeAck").onchange=()=>{$("codeDone").disabled=!$("codeAck").checked};
+$("codeDone").onclick=()=>{$("codeModal").hidden=true};
+$("copyCode").onclick=async()=>{
+  try{await navigator.clipboard.writeText($("codeText").textContent);$("copyCode").textContent="U kopjua"}
+  catch(_){const r=document.createRange();r.selectNodeContents($("codeText"));const s=getSelection();s.removeAllRanges();s.addRange(r)}
+};
+$("newCodeBtn").onclick=()=>{$("newCodeForm").hidden=!$("newCodeForm").hidden;$("ncPass").focus()};
+$("newCodeForm").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  try{const c=await newRecoveryCode($("ncPass").value);$("ncPass").value="";$("newCodeForm").hidden=true;showCode(c)}
+  catch(_){say("Password-i s'është i saktë.")}
+});
 $("logout").onclick=async()=>{ if(user) await keyDel(user.uid); signOut(auth) };
 
 /* ---------- form ---------- */
