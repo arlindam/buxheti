@@ -177,6 +177,8 @@ form{display:grid;gap:14px}
 .me{display:flex;align-items:center;gap:8px}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:.85rem}
 .top-r{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.unlock-h{font-family:var(--display);font-weight:700;font-size:1.15rem;margin:0 0 6px;text-align:center}
+.lock-note{margin:0;font-size:.8rem;color:var(--muted);line-height:1.45;background:var(--surface-2);border-radius:12px;padding:10px 12px}
 </style>
 </head>
 <body>
@@ -185,10 +187,11 @@ form{display:grid;gap:14px}
 <main class="auth" id="auth" hidden>
   <div class="auth-card">
     <div class="auth-hero"><h1>Buxheti Im</h1><p>Të ardhurat, faturat dhe shpenzimet e tua, kudo që je.</p></div>
-    <div class="seg" role="tablist" aria-label="Hyr ose regjistrohu">
+    <div class="seg" id="modeTabs" role="tablist" aria-label="Hyr ose regjistrohu">
       <label><input type="radio" name="mode" id="mLogin" value="login" checked>Hyr</label>
       <label><input type="radio" name="mode" id="mSignup" value="signup">Krijo llogari</label>
     </div>
+    <div id="unlockHead" hidden><h2 class="unlock-h">Hap të dhënat e tua</h2><p class="center">Të dhënat janë të enkriptuara. Shkruaj password-in që t'i hapësh në këtë pajisje.</p></div>
     <form id="authForm" novalidate>
       <label class="field" id="nameField" hidden><span class="lbl">Emri</span><input id="aName" type="text" autocomplete="name" maxlength="40" placeholder="p.sh. Arlinda"></label>
       <label class="field"><span class="lbl">Email</span><input id="aEmail" type="email" autocomplete="email" placeholder="emri@gmail.com"></label>
@@ -196,7 +199,10 @@ form{display:grid;gap:14px}
       <p class="err" id="aErr" aria-live="polite"></p>
       <button class="btn" id="aBtn" type="submit">Hyr</button>
       <p class="center" id="forgotRow"><button class="linkbtn" id="forgot" type="button">E harrove password-in?</button></p>
+      <p class="center" id="resetRow" hidden><button class="btn sm danger" id="startOver" type="button">Fillo nga e para</button></p>
     </form>
+    <p class="lock-note"><span aria-hidden="true">🔒</span> Të dhënat enkriptohen në pajisjen tënde me password-in tënd. Askush tjetër s'mund t'i lexojë, as administratorja e aplikacionit.</p>
+    <p class="center" id="unlockOut" hidden><button class="linkbtn" id="unlockLogout" type="button">Dil nga llogaria</button></p>
   </div>
 </main>
 
@@ -279,7 +285,7 @@ form{display:grid;gap:14px}
   <section class="card backup">
     <div>
       <h2>Të dhënat e tua</h2>
-      <p id="acctLine">Ruhen në llogarinë tënde dhe i sheh nga çdo pajisje. Askush tjetër s'i sheh.</p>
+      <p id="acctLine">Të dhënat enkriptohen me password-in tënd para se të ruhen. I sheh nga çdo pajisje, por askush tjetër s'mund t'i lexojë, as administratorja.</p>
     </div>
     <div class="acts">
       <button class="btn sm ghost" id="exportBtn" type="button">Shkarko backup</button>
@@ -294,7 +300,7 @@ form{display:grid;gap:14px}
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   updateProfile, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, deleteDoc, onSnapshot, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ====== FIREBASE ====== */
 const firebaseConfig = {
@@ -337,7 +343,37 @@ const money=n=>(n<0?"−":"")+Math.abs(n).toLocaleString("de-DE",{minimumFractio
 const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const valid=e=>e&&typeof e.id==="string"&&(e.kind==="in"||e.kind==="out")&&typeof e.amount==="number"&&e.amount>0&&/^\d{4}-\d{2}-\d{2}$/.test(e.date);
 
-let user=null, entries=[], limits={}, unsubs=[];
+/* ====== ENKRIPTIMI ======
+   Çdo hyrje enkriptohet në pajisjen e përdoruesit me AES-256,
+   me një çelës që del nga password-i i tij. Në Firebase ruhet
+   vetëm teksti i enkriptuar, që askush s'mund ta lexojë. */
+const TE=new TextEncoder(), TD=new TextDecoder();
+const b64=buf=>{let s="";new Uint8Array(buf).forEach(b=>s+=String.fromCharCode(b));return btoa(s)};
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+let KEY=null;
+async function deriveKey(pass,saltB64){
+  const base=await crypto.subtle.importKey("raw",TE.encode(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:unb64(saltB64),iterations:310000,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function seal(obj,key=KEY){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,TE.encode(JSON.stringify(obj)));
+  return {iv:b64(iv),ct:b64(ct)};
+}
+async function unseal(d,key=KEY){
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(d.iv)},key,unb64(d.ct));
+  return JSON.parse(TD.decode(pt));
+}
+const isSealed=d=>d&&typeof d.iv==="string"&&typeof d.ct==="string";
+
+/* çelësi ruhet vetëm në këtë pajisje (IndexedDB), i pa-eksportueshëm */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open("buxheti-keys",1);r.onupgradeneeded=()=>r.result.createObjectStore("k");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function keyGet(uid){try{const d=await idb();return await new Promise(r=>{const q=d.transaction("k").objectStore("k").get(uid);q.onsuccess=()=>r(q.result||null);q.onerror=()=>r(null)})}catch(_){return null}}
+async function keySet(uid,k){try{const d=await idb();d.transaction("k","readwrite").objectStore("k").put(k,uid)}catch(_){}}
+async function keyDel(uid){try{const d=await idb();d.transaction("k","readwrite").objectStore("k").delete(uid)}catch(_){}}
+
+let user=null, entries=[], limits={}, unsubs=[], pendingPass=null, snapVer=0, unlocking=false;
 const now=new Date();
 let view={y:now.getFullYear(),m:now.getMonth()};
 let filter="all", editingLimits=false;
@@ -350,24 +386,67 @@ const userRef=()=>doc(db,"users",user.uid);
 /* ---------- screens ---------- */
 function show(which){
   $("loading").hidden=which!=="loading";
-  $("auth").hidden=which!=="auth";
+  $("auth").hidden=which!=="auth"&&which!=="unlock";
   $("app").hidden=which!=="app";
+  const unlock=which==="unlock";
+  $("modeTabs").hidden=unlock; $("unlockHead").hidden=!unlock; $("unlockOut").hidden=!unlock;
+  $("aEmail").readOnly=unlock;
+  if(unlock){$("nameField").hidden=true;$("forgotRow").hidden=true;$("aBtn").textContent="Hap të dhënat";$("aEmail").value=user.email;$("aPass").value="";$("aPass").focus()}
+  else if(which==="auth"){$("resetRow").hidden=true;syncMode()}
 }
 
-onAuthStateChanged(auth,u=>{
-  unsubs.forEach(f=>f()); unsubs=[];
-  user=u; entries=[]; limits={};
-  if(!u){show("auth");return}
-  const name=u.displayName||u.email.split("@")[0];
+/* gjen ose krijon çelësin për këtë përdorues */
+async function unlockWith(pass){
+  const snap=await getDoc(userRef()); const d=snap.data()||{};
+  if(!d.salt){                                   // përdorues i ri, ose i vjetër pa enkriptim
+    const salt=b64(crypto.getRandomValues(new Uint8Array(16)));
+    const k=await deriveKey(pass,salt);
+    const plainLimits=d.limits&&!isSealed(d.limits)?d.limits:{};
+    await setDoc(userRef(),{salt,check:await seal("ok",k),limits:await seal(plainLimits,k)});
+    return k;
+  }
+  const k=await deriveKey(pass,d.salt);
+  try{ if(await unseal(d.check,k)==="ok") return k }catch(_){}
+  return null;                                   // password-i s'e hap
+}
+
+async function startApp(){
+  if(unsubs.length)return;
+  const name=user.displayName||user.email.split("@")[0];
   $("avatar").textContent=name.charAt(0).toUpperCase();
-  $("avatar").title=name+" · "+u.email;
+  $("avatar").title=name+" · "+user.email;
   show("app"); render();
-  unsubs.push(onSnapshot(collection(db,"users",u.uid,"entries"),snap=>{
-    entries=snap.docs.map(d=>({id:d.id,...d.data()})).filter(valid); render();
+  unsubs.push(onSnapshot(collection(db,"users",user.uid,"entries"),async snap=>{
+    const ver=++snapVer, out=[], legacy=[];
+    for(const d of snap.docs){
+      const raw=d.data();
+      if(isSealed(raw)){try{out.push({id:d.id,...await unseal(raw)})}catch(_){}}
+      else {out.push({id:d.id,...raw}); legacy.push({id:d.id,...raw})}
+    }
+    if(ver!==snapVer)return;
+    entries=out.filter(valid); render();
+    // hyrjet e vjetra (pa enkriptim) enkriptohen automatikisht
+    for(const e of legacy.filter(valid)){const {id,...body}=e; try{await setDoc(entryRef(id),await seal(body))}catch(_){}}
   },err=>say("S'po lidhem me databazën ("+err.code+").")));
-  unsubs.push(onSnapshot(userRef(),snap=>{
-    const d=snap.data(); limits=(d&&d.limits)||{}; render();
+  unsubs.push(onSnapshot(userRef(),async snap=>{
+    const d=snap.data(); let l={};
+    if(d&&d.limits){ if(isSealed(d.limits)){try{l=await unseal(d.limits)}catch(_){}} else l=d.limits }
+    limits=l; render();
   },()=>{}));
+}
+
+onAuthStateChanged(auth,async u=>{
+  if(unlocking&&u&&user&&u.uid===user.uid)return;
+  unsubs.forEach(f=>f()); unsubs=[]; snapVer++;
+  user=u; entries=[]; limits={}; KEY=null;
+  if(!u){show("auth");return}
+  show("loading");
+  try{
+    if(pendingPass){ const p=pendingPass; pendingPass=null; KEY=await unlockWith(p); if(KEY) await keySet(u.uid,KEY) }
+    else KEY=await keyGet(u.uid);
+  }catch(_){KEY=null}
+  if(KEY) startApp();
+  else { show("unlock"); $("aErr").classList.remove("ok"); $("aErr").textContent="" }
 });
 
 /* ---------- auth form ---------- */
@@ -398,25 +477,50 @@ $("authForm").addEventListener("submit",async ev=>{
   err.classList.remove("ok"); err.textContent="";
   $("aBtn").disabled=true;
   try{
+    if(user&&!KEY){                                         // ekrani "Hap të dhënat"
+      unlocking=true;
+      try{ await signInWithEmailAndPassword(auth,user.email,pass) } finally { setTimeout(()=>{unlocking=false},1500) }
+      const k=await unlockWith(pass);
+      if(k){KEY=k;await keySet(user.uid,k);startApp()}
+      else{err.textContent="Ky është password-i yt i ri, por të dhënat u enkriptuan me password-in e vjetër. Shkruaj password-in e vjetër, ose fillo nga e para.";$("resetRow").hidden=false}
+      return;
+    }
     if(mode()==="signup"){
       const name=$("aName").value.trim();
       if(!name){err.textContent="Shkruaj emrin.";return}
+      pendingPass=pass;
       const cred=await createUserWithEmailAndPassword(auth,email,pass);
       await updateProfile(cred.user,{displayName:name});
       $("avatar").textContent=name.charAt(0).toUpperCase();
     } else {
+      pendingPass=pass;
       await signInWithEmailAndPassword(auth,email,pass);
     }
-  }catch(e){err.textContent=AUTH_ERR[e.code]||"Diçka shkoi keq ("+e.code+")."}
+  }catch(e){pendingPass=null;err.textContent=AUTH_ERR[e.code]||"Diçka shkoi keq ("+(e.code||e.message)+")."}
   finally{$("aBtn").disabled=false}
 });
 $("forgot").onclick=async()=>{
   const email=$("aEmail").value.trim(), err=$("aErr");
   if(!email){err.classList.remove("ok");err.textContent="Shkruaj email-in lart, pastaj kliko sërish.";$("aEmail").focus();return}
-  try{await sendPasswordResetEmail(auth,email);err.classList.add("ok");err.textContent="Të dërguam një email për ta ndryshuar password-in."}
+  try{await sendPasswordResetEmail(auth,email);err.classList.add("ok");err.textContent="Të dërguam një email. Kujdes: me password të ri, të dhënat e vjetra s'mund të hapen, sepse janë të enkriptuara me të vjetrin."}
   catch(e){err.classList.remove("ok");err.textContent=AUTH_ERR[e.code]||"S'u dërgua ("+e.code+")."}
 };
-$("logout").onclick=()=>signOut(auth);
+let resetArmed=false;
+$("startOver").onclick=async()=>{
+  const b=$("startOver");
+  if(!resetArmed){resetArmed=true;b.textContent="Kliko sërish: të dhënat e vjetra fshihen";setTimeout(()=>{resetArmed=false;b.textContent="Fillo nga e para"},5000);return}
+  resetArmed=false; const pass=$("aPass").value, err=$("aErr");
+  try{
+    unlocking=true;
+    try{ await signInWithEmailAndPassword(auth,user.email,pass) } finally { setTimeout(()=>{unlocking=false},1500) }
+    const snap=await getDocs(collection(db,"users",user.uid,"entries"));
+    await commitInChunks(snap.docs.map(d=>b=>b.delete(d.ref)));
+    await deleteDoc(userRef());
+    const k=await unlockWith(pass); KEY=k; await keySet(user.uid,k); $("resetRow").hidden=true; startApp();
+  }catch(e){err.textContent=AUTH_ERR[e.code]||"S'u krye ("+(e.code||e.message)+")."}
+};
+$("unlockLogout").onclick=()=>signOut(auth);
+$("logout").onclick=async()=>{ if(user) await keyDel(user.uid); signOut(auth) };
 
 /* ---------- form ---------- */
 const kind=()=>document.querySelector('input[name=kind]:checked').value;
@@ -432,7 +536,7 @@ function fillChips(){
 
 /* ---------- render ---------- */
 function render(){
-  if(!user)return;
+  if(!user||!KEY)return;
   const month=entries.filter(e=>e.date.slice(0,7)===ym());
   const tin=month.filter(e=>e.kind==="in").reduce((a,e)=>a+e.amount,0);
   const tout=month.filter(e=>e.kind==="out").reduce((a,e)=>a+e.amount,0);
@@ -483,7 +587,7 @@ function render(){
         const v=parseFloat(inp.value), next={...limits};
         if(v>0)next[c.id]=v; else delete next[c.id];
         limits=next; render(); const n=$("lim-"+c.id); if(n)n.focus();
-        try{await setDoc(userRef(),{limits:next})}catch(_){say("Limiti s'u ruajt. Provo përsëri.")}
+        try{await setDoc(userRef(),{limits:await seal(next)},{merge:true})}catch(_){say("Limiti s'u ruajt. Provo përsëri.")}
       });
       w.append(inp); d.append(w);
     }
@@ -529,7 +633,7 @@ $("form").addEventListener("submit",async ev=>{
   const [y,m]=date.split("-").map(Number); view={y,m:m-1};
   $("amount").value=""; $("note").value=""; $("amount").focus();
   try{
-    await setDoc(ref,body);
+    await setDoc(ref,await seal(body));
     say("U shtua "+money(amount)+".");
   }catch(_){say("S'u ruajt. Kontrollo internetin dhe provo përsëri.")}
 });
@@ -550,10 +654,10 @@ $("limitsBtn").onclick=()=>{
 
 /* ---------- backup ---------- */
 $("exportBtn").onclick=()=>{
-  const blob=new Blob([JSON.stringify({app:"buxheti",version:2,exported:new Date().toISOString(),entries,limits},null,2)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({app:"buxheti",version:3,exported:new Date().toISOString(),entries,limits},null,2)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="buxheti-backup-"+iso(new Date())+".json";
   document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  say("Backup-i u shkarkua.");
+  say("Backup-i u shkarkua. Ky file s'është i enkriptuar, ruaje me kujdes.");
 };
 async function commitInChunks(ops){
   for(let i=0;i<ops.length;i+=400){const b=writeBatch(db); ops.slice(i,i+400).forEach(fn=>fn(b)); await b.commit()}
@@ -564,8 +668,9 @@ $("importFile").addEventListener("change",ev=>{
   rd.onload=async()=>{
     try{
       const d=JSON.parse(rd.result); const inc=(Array.isArray(d)?d:d.entries||[]).filter(valid);
-      await commitInChunks(inc.map(e=>b=>{const {id,...body}=e;b.set(entryRef(id),body)}));
-      if(d.limits&&typeof d.limits==="object") await setDoc(userRef(),{limits:{...limits,...d.limits}});
+      const sealed=[]; for(const e of inc){const {id,...body}=e; sealed.push([id,await seal(body)])}
+      await commitInChunks(sealed.map(([id,s])=>b=>b.set(entryRef(id),s)));
+      if(d.limits&&typeof d.limits==="object") await setDoc(userRef(),{limits:await seal({...limits,...d.limits})},{merge:true});
       say("U ngarkuan "+inc.length+" hyrje nga backup-i.");
     }catch(_){say("Ky file nuk është backup i Buxhetit, ose s'u ruajt.")}
     ev.target.value="";
@@ -577,7 +682,7 @@ $("wipeBtn").onclick=async()=>{
   const b=$("wipeBtn");
   if(!b.classList.contains("armed")){b.classList.add("armed");b.textContent="Kliko sërish për t'i fshirë";clearTimeout(armTimer);armTimer=setTimeout(()=>{b.classList.remove("armed");b.textContent="Fshi të gjitha"},4000);return}
   clearTimeout(armTimer); b.classList.remove("armed"); b.textContent="Fshi të gjitha";
-  try{await commitInChunks(entries.map(e=>bt=>bt.delete(entryRef(e.id))));await setDoc(userRef(),{limits:{}});say("Të gjitha hyrjet u fshinë.")}
+  try{await commitInChunks(entries.map(e=>bt=>bt.delete(entryRef(e.id))));await setDoc(userRef(),{limits:await seal({})},{merge:true});say("Të gjitha hyrjet u fshinë.")}
   catch(_){say("S'u fshinë. Provo përsëri.")}
 };
 
